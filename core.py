@@ -83,20 +83,20 @@ class LexerBase(object):
         return ForwardLexer()
 
     def lex(self, matchobj, string, Junk=Token.Junk):
-        rev_string = string[::-1][-matchobj.start():]
-        fwd_string = string[matchobj.end():]
-
-        rev_lexer = self.reverse_lexer
-        fwd_lexer = self.forward_lexer
-
-        rev_tokenized = list(rev_lexer.get_tokens_unprocessed(rev_string))
-        fwd_tokenized = list(fwd_lexer.get_tokens_unprocessed(fwd_string))
 
         result = defaultdict(list)
+
+        rev_string = string[::-1][-matchobj.start():]
+        rev_lexer = self.reverse_lexer
+        rev_tokenized = list(rev_lexer.get_tokens_unprocessed(rev_string))
         for pos, token, text in rev_tokenized:
             if token != Junk:
                 result[token].append(text[::-1])
 
+        import pdb;pdb.set_trace()
+        fwd_string = string[matchobj.end():]
+        fwd_lexer = self.forward_lexer
+        fwd_tokenized = list(fwd_lexer.get_tokens_unprocessed(fwd_string))
         for pos, token, text in fwd_tokenized:
             if token != Junk:
                 result[token].append(text)
@@ -106,6 +106,17 @@ class LexerBase(object):
 # Custom Tokens
 Statute = Token.Statute
 Junk = Token.Junk
+
+# Regexes
+rgxs = {
+    'statute_section': '''
+    (?x)                   # Compile verbose
+    ,?\s{,2}               # Whitespace
+    (\d[\w\-.]+)           # 123-2.1
+    (?:\s{,2})             # Optional whitespace
+    (\([\w\-.]+\))+        # Enumerations like "(1)" or "(12.1-a)"
+    '''
+    }
 
 
 class Statute(LexerBase):
@@ -118,9 +129,17 @@ class Statute(LexerBase):
 
     forward_tokens = {
         'root': [
-            (ur'(\s{,3})(\xa7{,2})(\s{,3})(\d[\w\-.]+)',
-                bygroups(Junk, Statute.SecSymbol, Junk, Statute.Section)),
-            ]
+            (ur'(:?\s{,3})(:?\xa7{,2})*(?:\s{,3})%s' % rgxs['statute_section'],
+                bygroups(Junk, Statute.SecSymbol, Statute.Section)),
+            #(',?\s{,2}(\d[\w\-.]+)', bygroups(Statute.Section)),
+            (ur'\s{,2}\((\d{4})(?:\)|(?: ed(?:\.?|ition),?))(?:\s{,2}Supp.? (\w+))?',
+                bygroups(Statute.Edition, Statute.Supp)),
+            (ur'(?:\s{,2}\([\w\-.]+\))+', Statute.Subdivisions)
+            ],
+
+        # 'subdivisions': [
+        #     (ur'(?:\s{,2}\([\w\-.]+\))+', Statute.Subdivisions)
+        #     ]
         }
 
 
