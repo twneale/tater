@@ -128,7 +128,6 @@ class LexerBase(object):
         fwd_lexer = self.forward_lexer
         fwd_tokenized = list(fwd_lexer.get_tokens_unprocessed(fwd_string))
 
-        import nose.tools;nose.tools.set_trace()
         if self.DEBUG:
             self.rev_string = self.rs = rev_string
             self.fwd_string = self.fs = fwd_string
@@ -151,50 +150,6 @@ def scan(string, scanner=Scanner()):
 Statute = Token.Statute
 Junk = Token.Junk
 t = Token
-
-
-class Field(tuple):
-
-    __slots__ = ()
-
-    _fields = ('name', 'flat', 'required', 'groupwith',
-               'boolean', 'kwargs')
-
-    def __new__(_cls, name, flat=True, required=False,
-                groupwith=None, boolean=False, **kwargs):
-        return tuple.__new__(_cls, (name, flat, required, groupwith,
-                                    boolean, kwargs))
-
-    def __repr__(self):
-        'Return a nicely formatted representation string'
-        return ('Field(name=%r, flat=%r, required=%r, '
-                'groupwith=%r, boolean=%r, kwargs=%r)') % self
-
-    def _asdict(self):
-        'Return a new OrderedDict which maps field names to their values'
-        return OrderedDict(zip(self._fields, self))
-
-    __dict__ = property(_asdict)
-
-    def _replace(_self, **kwds):
-        'Return a new Field object replacing specified fields with new values'
-        fields = ('name', 'flat', 'required', 'groupwith',
-                  'boolean', 'kwargs')
-        result = _self._make(map(kwds.pop, fields, _self))
-        if kwds:
-            raise ValueError('Got unexpected field names: %r' % kwds.keys())
-        return result
-
-    def __getnewargs__(self):
-        'Return self as a plain tuple.  Used by copy and pickle.'
-        return tuple(self)
-
-    name = property(itemgetter(0), doc='Alias for field number 0')
-    flat = property(itemgetter(1), doc='Alias for field number 1')
-    required = property(itemgetter(2), doc='Alias for field number 2')
-    groupwith = property(itemgetter(3), doc='Alias for field number 3')
-    boolean = property(itemgetter(4), doc='Alias for field number 4')
-    kwargs = property(itemgetter(4), doc='Alias for field number 5')
 
 
 class Statute(LexerBase):
