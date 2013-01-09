@@ -1,4 +1,5 @@
 from operator import itemgetter
+from nose.tools import set_trace
 
 
 class CachedAttr(object):
@@ -56,3 +57,51 @@ class _TokenType(tuple):
 
 
 Token = _TokenType()
+
+
+class Node(object):
+
+    def __init__(self, name, key=None, value=None, parent=None,
+                 attrs=None, kids=None):
+        self.name = name
+        attrs = attrs or {}
+        if None not in [key, value]:
+            attrs.update({key: value})
+        self.attrs = attrs
+        self.kids = kids or []
+        self.parent = parent
+
+    def __repr__(self):
+        s = 'Node(name=%r, attrs=%r, kids=%r)'
+        return s % (self.name, self.attrs, self.kids)
+
+    def new_child(self, name, key, value):
+        child = Node(name, key, value, parent=self)
+        self.kids.append(child)
+        return child
+
+    def resolve(self, name, key, value):
+        '''Refactor this crap.
+        '''
+        if name == self.name:
+            if key in self.attrs:
+                return self.parent.new_child(name, key, value)
+            else:
+                # Add the new data items to this instance.
+                self.attrs.update({key: value})
+                return self
+        else:
+            if self.kids:
+                kid = self.kids[-1]
+                if key in kid.attrs:
+                    return self.new_child(name, key, value)
+                else:
+                    # Add the new data items to this instance.
+                    kid.attrs.update({key: value})
+                    return kid
+
+            return self.new_child(name, key, value)
+
+    def asdata(self):
+        kids = [kid.asdata() for kid in self.kids]
+        return dict(name=self.name, attrs=self.attrs, kids=kids)

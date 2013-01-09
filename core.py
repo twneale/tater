@@ -6,16 +6,20 @@ from operator import methodcaller, itemgetter
 
 from pygments.lexer import RegexLexer, bygroups
 from pygments.token import *
+import yaml
 
 import trie
-from utils import CachedAttr
+from utils import CachedAttr, Node
 
 _translate_table = dict(zip(map(ord, ' .,:[]()'), itertools.repeat(None)))
 
 
 def squish(u, tr_table=_translate_table):
     'Stupid name for a stupid function.'
+    # try:
     return u.translate(tr_table).lower()
+    # except:
+    #     import nose.tools;nose.tools.set_trace()
 
 
 class LexerType(type):
@@ -64,6 +68,7 @@ class _SplitLexerBase(RegexLexer):
 
 class LexerBase(object):
     __metaclass__ = LexerType
+    DEBUG = True
 
     def __init__(self):
         self._fieldsdata = defaultdict(list)
@@ -76,19 +81,20 @@ class LexerBase(object):
 
     def __call__(self, matchobj, string):
         matchobj, string = self.before_lex(matchobj, string)
-        result = self.lex(matchobj, string)
-        result = self.after_lex(matchobj, string, result)
-        return result
+        rev_tokens, fwd_tokens = self.lex(matchobj, string)
+        result = self.parse(rev_tokens, fwd_tokens)
+        result = self.after_lex(result)
+        return result.asdata()
 
     def get_slug(self):
         return self.slug.replace(' ', '').replace('.', '').lower()
 
     def before_lex(self, matchobj, string):
-        '''Pre-lex hood.
+        '''Pre-lex hook.
         '''
         return matchobj, string
 
-    def after_lex(self, matchobj, string, result):
+    def after_lex(self, result):
         '''Post-lex hook.
         '''
         return result
@@ -114,155 +120,37 @@ class LexerBase(object):
     def lex(self, matchobj, string, Junk=Token.Junk):
         '''Produces a mapping of token types to pos, text 2-tuples.
         '''
-        result = defaultdict(list)
-
         rev_string = string[::-1][-matchobj.start():]
         rev_lexer = self.reverse_lexer
         rev_tokenized = list(rev_lexer.get_tokens_unprocessed(rev_string))
-        for pos, token, text in rev_tokenized:
-            if token != Junk:
-                result[token].append((pos, text[::-1]))
 
         fwd_string = string[matchobj.end():]
         fwd_lexer = self.forward_lexer
         fwd_tokenized = list(fwd_lexer.get_tokens_unprocessed(fwd_string))
-        for pos, token, text in fwd_tokenized:
-            if token != Junk:
-                result[token].append((pos, text))
-        return dict(result)
 
+        import nose.tools;nose.tools.set_trace()
+        if self.DEBUG:
+            self.rev_string = self.rs = rev_string
+            self.fwd_string = self.fs = fwd_string
+            self.rev_tokenized = self.rt = rev_tokenized
+            self.fwd_tokenized = self.ft = fwd_tokenized
+
+        return (rev_tokenized, fwd_tokenized)
+
+    def flip_rev_tokens(self, toks):
+        '''Flip the rev tokens so they appear in natural left-to-right
+        order.
+        '''
+        return [(pos, token, text[::-1]) for (pos, token, text) in toks[::-1]]
 
 def scan(string, scanner=Scanner()):
-    return list(scanner(string))
+    return scanner(string)
 
 
 # Custom Tokens
 Statute = Token.Statute
 Junk = Token.Junk
-
-
-class Statute(LexerBase):
-
-    reverse_tokens = {
-        'root': [
-            (ur'\s*(\d+)', bygroups(Statute.Title)),
-            ]
-        }
-
-    re_enumeration = ur'\s*(\d[\w\-.]+)'
-
-    forward_tokens = {
-        'root': [
-            (ur'\s*(\xa7{1,2})', bygroups(Statute.SecSymbol)),
-            (re_enumeration, bygroups(Statute.Section), 'after_enum'),
-            (ur'\s{,2}\((\d{4})(?:\)|(?: ed(?:\.?|ition),?))(?:\s{,2}Supp.? (\w+))?',
-                bygroups(Statute.Edition, Statute.Supplement)),
-            (ur', ', Token.Junk),
-            ],
-
-        # Things that are expected after a section number: subdivisions or
-        # another section.
-        'after_enum': [
-            (',\s*' + re_enumeration, bygroups(Statute.Section)),
-            (ur'(?i)\s{,2}(note)\.', bygroups(Statute.Note)),
-            (ur'(?i)\s{,2}(et\s{,5}seq)', bygroups(Statute.EtSeq)),
-            (ur'(?:\s{,2}\([\w\-.]+\))+', Statute.Subdivisions, '#pop'),
-            ('', Junk, '#pop')
-            ]
-        }
-
-    def after_lex(self, matchobj, string, result):
-        fields = self._fields
-        default_field = Field('DefaultField')
-        _result = result
-        result = {}
-        import nose.tools
-        nose.tools.set_trace()
-        for k, v in _result.items():
-            new_k = str(k).split('.')[-1].lower()
-            field = fields.get(new_k, default_field)
-            value = None
-
-            if field.boolean:
-                result[new_k] = bool(text)
-                continue
-            elif field.flat is True:
-                pos, value = v.pop()
-            else:
-                for pos, value in v:
-                    pass
-
-            result[new_k] = value
-
-        result['id'] = self.get_slug()
-        if 'subdivisions' in result:
-            text = result['subdivisions']
-            subs = text.strip(' ()')
-            subs = re.split(r'\)\s*\(', subs)
-            result['subdivisions'] = tuple(filter(None, subs))
-        # import nose.tools
-        # nose.tools.set_trace()
-
-        return result
-
-    def lex(self, matchobj, string, Junk=Token.Junk):
-        '''Produces a mapping of token types to pos, text 2-tuples.
-        '''
-        rev_string = string[::-1][-matchobj.start():]
-        rev_lexer = self.reverse_lexer
-        rev_tokenized = list(rev_lexer.get_tokens_unprocessed(rev_string))
-
-        fwd_string = string[matchobj.end():]
-        fwd_lexer = self.forward_lexer
-        fwd_tokenized = list(fwd_lexer.get_tokens_unprocessed(fwd_string))
-
-        return (rev_tokenized, fwd_tokenized)
-
-    t = Token
-    rules = {
-        'root': [
-            rule(t.Literal, then='left_operand'),
-            rule(t.Operator, ('+', '-',), then='unary_operator_left'),
-            ],
-
-        'left_operand': [
-            rule(t.Operator, list('+-*/%'), then='binary_operator'),
-            rule(t.Operator, ('++', '--'), then='unary_operator_left'),
-            ],
-
-        'binary_operator': [
-            rule(t.Literal, then='right_operand'),
-            rule(t.Punctuation, ('(')),
-            rule(t.Operator, '+-', then='unary_operator_left'),
-            ],
-
-        'unary_operator_right': [
-            rule(t.Operator, list('+-*/%'), then='binary_operator'),
-            rule(t.Operator, ('+', '-', '++', '--'),
-                 then='unary_operator_right'),
-            rule(t.Punctuation, list(',;)'), end=True)
-            ],
-
-        'unary_operator_left': [
-            rule(t.Literal, then='right_operand'),
-            rule(t.Operator, list('+-'), then='unary_operator_left'),
-            rule(t.Operator, ['++', '--'], then='unary_inc_dec_left'),
-            ],
-
-        'unary_inc_dec_left': [
-            rule(t.Operator, ('+', '-', '++', '--'),
-                 then='unary_operator_right'),
-            rule(t.Punctuation, list(',;)'), end=True)
-            ],
-
-        'right_operand': [
-            rule(t.Operator, list('+-*/%'), then='binary_operator'),
-            rule(t.Operator, ('+', '-', '++', '--'),
-                 then='unary_operator_right'),
-            rule(t.Punctuation, list(',;)'), end=True)
-            ]
-        }
-
+t = Token
 
 
 class Field(tuple):
@@ -309,24 +197,184 @@ class Field(tuple):
     kwargs = property(itemgetter(4), doc='Alias for field number 5')
 
 
-class USC(Statute):
-    '''This is made weird by the need for a single scan result
-    to find multiple section numbers--and for those sectios to
-    share the id and title information.
-    '''
-    fields = (
-        Field('title', required=True),
-        Field('section', flat=False),
-        Field('subdivisions', groupwith='section'),
-        Field('note', boolean=True),
-        Field('etseq', boolean=True),
-        )
+class Statute(LexerBase):
 
+    reverse_tokens = {
+        'root': [
+            (ur'\s*(\d+)', bygroups(t.Title.Enumeration)),
+            ]
+        }
+
+    re_enumeration = ur'\s*(\d[\w\-.]+)'
+
+    forward_tokens = {
+        'root': [
+            (ur'\s*(\xa7{1,2})', bygroups(t.SecSymbol)),
+            (re_enumeration, bygroups(t.Section.Enumeration), 'after_enum'),
+            (ur'\s{,2}\((\d{4})(?:\)|(?: ed(?:\.?|ition),?))(?:\s{,2}Supp.? (\w+))?',
+                bygroups(t.Root.Edition, t.Root.Supplement)),
+            (ur', ', t.Junk),
+            ],
+
+        # Things that are expected after a section number: subdivisions or
+        # another section.
+        'after_enum': [
+            (ur'(?i)\s{,2}(et\s{,5}seq\.?)', bygroups(t.Section.EtSeq)),
+            (',\s*' + re_enumeration, bygroups(t.Section.Enumeration)),
+            (ur'(?i)\s{,2}(note)\.', bygroups(t.Section.Note)),
+            (ur'(?:\s{,2}\([\w\-.]+\))+', t.Section.Subdivisions, '#pop'),
+            ('', Junk, '#pop')
+            ]
+        }
+
+    structure = yaml.load('''
+        title:
+          section:
+            subdivisions:
+        ''')
+
+    def _process_tokens(self, tokens, result, stack, parent_map, reverse=False):
+        for pos, token, text in tokens:
+            if reverse:
+                text = text[::-1]
+            node_name, value_name = str(token).lower().split('.')[-2:]
+
+            # Skip if node_name isn't represented in the schema.
+            if node_name != 'root' and node_name not in parent_map:
+                continue
+
+            # Get the node_name's parent name.
+            parent_name = parent_map[node_name]
+
+            # Get the last such node's parent from the stack.
+            parent = stack[parent_name][-1]
+
+            # Resolve our data against the retrieved parent.
+            if node_name != 'root':
+                node = parent.resolve(node_name, value_name, text)
+                stack[node_name].append(node)
+            else:
+                node = result
+                # Set the current text on the new node. Necessary?
+                node.attrs[value_name] = text
+
+        return result, stack
+
+    def parse(self, rev_tokens, fwd_tokens):
+
+        result = Node(name='root')
+        stack = defaultdict(list)
+
+        def _walk(node, parent_map=None, parent=None):
+            '''Walk an arbitrarily nested dictionary
+            and flatten it into a mapping of child keys
+            to parent keys.
+            '''
+            if parent_map is None:
+                parent_map = {'root': 'root'}
+            if parent is None:
+                parent = 'root'
+            for key, val in node.items():
+                parent_map[key] = parent
+                if val:
+                    _walk(val, parent_map, key)
+            return parent_map
+
+        parent_map = _walk(self.structure)
+        stack['root'].append(result)
+
+        rev_tokens = list(rev_tokens)
+        result, stack = self._process_tokens(
+            rev_tokens, result, stack, parent_map, reverse=True)
+        fwd_tokens = list(fwd_tokens)
+        result, stack = self._process_tokens(
+            fwd_tokens, result, stack, parent_map)
+
+        return result
+
+
+class USC(Statute):
     slug = u'U.S.C.'
 
 
-class CFR(Statute):
-    slug = u'C.F.R.'
+class PublicLaw(LexerBase):
+    slug = u'publ'
+
+    re_enumeration = ur'\s*(\d[\w\-.]+)'
+
+    forward_tokens = {
+        'root': [
+            (ur'\s*(\xa7{1,2})', bygroups(t.SecSymbol)),
+            (re_enumeration, bygroups(t.Section.Enumeration), 'after_enum'),
+            (ur'\s{,2}\((\d{4})(?:\)|(?: ed(?:\.?|ition),?))(?:\s{,2}Supp.? (\w+))?',
+                bygroups(t.Root.Edition, t.Root.Supplement)),
+            (ur', ', t.Junk),
+            ],
+
+        # Things that are expected after a section number: subdivisions or
+        # another section.
+        'after_enum': [
+            (ur'(?i)\s{,2}(et\s{,5}seq\.?)', bygroups(t.Section.EtSeq)),
+            (',\s*' + re_enumeration, bygroups(t.Section.Enumeration)),
+            (ur'(?i)\s{,2}(note)\.', bygroups(t.Section.Note)),
+            (ur'(?:\s{,2}\([\w\-.]+\))+', t.Section.Subdivisions, '#pop'),
+            ('', Junk, '#pop')
+            ]
+        }
+
+    structure = yaml.load('''
+        title:
+          section:
+            subdivisions:
+        ''')
+
+
+class USC_Natural_Language(LexerBase):
+    slug = u'United States Code'
+
+    re_enumeration = ur'\s*(\d[\w\-.]+)'
+
+    divisions = u'''
+        title
+        division
+        paragraph
+        section
+        part
+        clause
+        item
+        chapter
+    '''.split()
+    divisions = divisions + ['sub' + word for word in divisions]
+    divisions = sorted((w[::-1] for w in divisions), key=len, reverse=True)
+    re_divisions = '\s*(%s)' % '|'.join(divisions)
+
+    reverse_tokens = {
+        'root': [
+            (ur'[\s,]*(\d+)', bygroups(t.Division.Enumeration)),
+            (re_divisions, bygroups(t.Division.Name)),
+            ]
+        }
+
+    forward_tokens = {
+        'root': [
+             ],
+
+        # Things that are expected after a section number: subdivisions or
+        # another section.
+        'after_enum': [
+            ]
+        }
+
+    def parse(self, rev_tokens, fwd_tokens):
+        rev = self.flip_rev_tokens(rev_tokens)
+        import nose.tools;nose.tools.set_trace()
+
+    structure = yaml.load('''
+        title:
+          section:
+            subdivisions:
+        ''')
+
 
 
 def main():
