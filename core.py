@@ -4,8 +4,9 @@ import itertools
 from collections import defaultdict, OrderedDict
 from operator import methodcaller, itemgetter
 
-from pygments.lexer import RegexLexer, bygroups
+from pygments.lexer import RegexLexer, RegexLexerMeta, bygroups
 from pygments.token import *
+from pygments.token import _TokenType
 import yaml
 
 import trie
@@ -284,10 +285,150 @@ class PublicLaw(LexerBase):
         ''')
 
 
-class USC_Natural_Language(LexerBase):
+# class USC_Natural_Language(LexerBase):
+#     slug = u'United States Code'
+
+#     re_enumeration = ur'\s*(\d[\w\-.]+)'
+
+#     divisions = u'''
+#         title
+#         division
+#         paragraph
+#         section
+#         part
+#         clause
+#         item
+#         chapter
+#     '''.split()
+#     divisions = divisions + ['sub' + word for word in divisions]
+#     divisions = sorted((w[::-1] for w in divisions), key=len, reverse=True)
+#     re_divisions = '\s*(%s)' % '|'.join(divisions)
+
+#     reverse_tokens = {
+#         'root': [
+#             (ur'[\s,]*(\d+)( of)?', bygroups(t.Division.Enumeration)),
+#             (re_divisions, bygroups(t.Division.Name)),
+#             ]
+#         }
+
+#     forward_tokens = {
+#         'root': [
+#              ],
+
+#         # Things that are expected after a section number: subdivisions or
+#         # another section.
+#         'after_enum': [
+#             ]
+#         }
+
+#     def parse(self, rev_tokens, fwd_tokens):
+#         rev = self.flip_rev_tokens(rev_tokens)
+#         import nose.tools;nose.tools.set_trace()
+
+#     structure = yaml.load('''
+#         title:
+#           section:
+#             subdivisions:
+#         ''')
+
+
+class MyRegexLexer(RegexLexer):
+    """
+    Base for simple stateful regular expression-based lexers.
+    Simplifies the lexing process so that you need only
+    provide a list of states and regular expressions.
+    """
+    __metaclass__ = RegexLexerMeta
+
+    #: Flags for compiling the regular expressions.
+    #: Defaults to MULTILINE.
+    flags = re.MULTILINE
+
+    #: Dict of ``{'state': [(regex, tokentype, new_state), ...], ...}``
+    #:
+    #: The initial state is 'root'.
+    #: ``new_state`` can be omitted to signify no state transition.
+    #: If it is a string, the state is pushed on the stack and changed.
+    #: If it is a tuple of strings, all states are pushed on the stack and
+    #: the current state will be the topmost.
+    #: It can also be ``combined('state1', 'state2', ...)``
+    #: to signify a new, anonymous state combined from the rules of two
+    #: or more existing ones.
+    #: Furthermore, it can be '#pop' to signify going back one step in
+    #: the state stack, or '#push' to push the current state on the stack
+    #: again.
+    #:
+    #: The tuple can also be replaced with ``include('state')``, in which
+    #: case the rules from the state named by the string are included in the
+    #: current one.
+    tokens = {}
+
+    def get_tokens_unprocessed(self, text, stack=('root',)):
+        """
+        Split ``text`` into (tokentype, text) pairs.
+
+        ``stack`` is the inital stack (default: ``['root']``)
+        """
+        pos = 0
+        tokendefs = self._tokens
+        statestack = list(stack)
+        statetokens = tokendefs[statestack[-1]]
+        re_white = re.compile(r'\s{1,10}').match
+        while 1:
+            for rexmatch, action, new_state in statetokens:
+                m = rexmatch(text, pos)
+                if m:
+                    if type(action) is _TokenType:
+                        yield pos, action, m.group()
+                    else:
+                        for item in action(self, m):
+                            yield item
+                    pos = m.end()
+                    if new_state is not None:
+                        # state transition
+                        if isinstance(new_state, tuple):
+                            for state in new_state:
+                                if state == '#pop':
+                                    statestack.pop()
+                                elif state == '#push':
+                                    statestack.append(statestack[-1])
+                                else:
+                                    statestack.append(state)
+                        elif isinstance(new_state, int):
+                            # pop
+                            del statestack[new_state:]
+                        elif new_state == '#push':
+                            statestack.append(statestack[-1])
+                        else:
+                            assert False, "wrong state def: %r" % new_state
+                        statetokens = tokendefs[statestack[-1]]
+                    break
+                else:
+                    # Skip all whitespace not specified in lexer defs.
+                    m = re_white(text, pos)
+                    if m:
+                        pos = m.end()
+                        break
+
+            else:
+                try:
+                    if text[pos] == '\n':
+                        # at EOL, reset state to "root"
+                        statestack = ['root']
+                        statetokens = tokendefs['root']
+                        yield pos, Text, u'\n'
+                        pos += 1
+                        continue
+                    yield pos, Error, text[pos]
+                    pos += 1
+                except IndexError:
+                    break
+
+
+class Cow(MyRegexLexer):
     slug = u'United States Code'
 
-    re_enumeration = ur'\s*(\d[\w\-.]+)'
+    re_enumeration = ur'\s*([\d\w\-.]+)'
 
     divisions = u'''
         title
@@ -300,47 +441,61 @@ class USC_Natural_Language(LexerBase):
         chapter
     '''.split()
     divisions = divisions + ['sub' + word for word in divisions]
-    divisions = sorted((w[::-1] for w in divisions), key=len, reverse=True)
-    re_divisions = '\s*(%s)' % '|'.join(divisions)
+    divisions = sorted(divisions, key=len, reverse=True)
+    re_divisions = '(?i)\s*(%s)' % '|'.join(divisions)
 
-    reverse_tokens = {
+    tokens = {
         'root': [
-            (ur'[\s,]*(\d+)', bygroups(t.Division.Enumeration)),
-            (re_divisions, bygroups(t.Division.Name)),
-            ]
+            ('United States Code', Token.USCode),
+            ('of', Token.Of, '#pop'),
+            (re_divisions, bygroups(t.Division.Name), 'after_enum_type'),
+            ],
+
+        'after_enum_type': [
+            (re_enumeration, bygroups(t.Division.Enumeration), 'after_top_enum'),
+            ],
+
+        'after_top_enum': [
+            ('\(', t.Punctuation.OpenParen),
+            (re_enumeration, bygroups(t.Division.PathEnum)),
+            ('\)', t.Punctuation.CloseParen, ('#pop', 'root')),
+            ],
         }
 
-    forward_tokens = {
-        'root': [
-             ],
+    # forward_tokens = {
+    #     'root': [
+    #          ],
 
-        # Things that are expected after a section number: subdivisions or
-        # another section.
-        'after_enum': [
-            ]
-        }
+    #     # Things that are expected after a section number: subdivisions or
+    #     # another section.
+    #     'after_enum': [
+    #         ]
+    #     }
 
-    def parse(self, rev_tokens, fwd_tokens):
-        rev = self.flip_rev_tokens(rev_tokens)
-        import nose.tools;nose.tools.set_trace()
+    # def parse(self, rev_tokens, fwd_tokens):
+    #     rev = self.flip_rev_tokens(rev_tokens)
+    #     import nose.tools;nose.tools.set_trace()
 
-    structure = yaml.load('''
-        title:
-          section:
-            subdivisions:
-        ''')
-
-
+    # structure = yaml.load('''
+    #     title:
+    #       section:
+    #         subdivisions:
+    #     ''')
 
 def main():
-    import pdb;pdb.set_trace()
-    scanner = Scanner()
+    ff = Cow()
+    tt = ff.get_tokens_unprocessed('Section 1142(b) of title 10, United States Code, ')
+    tt = list(tt)
     import pprint
-    pprint.pprint(scanner._slug_lexer_mapping)
-    ss = u"Blah blah blah 5 USC 123 blah blah 3 USC 4 and 12 CFR 23.4-1 sayus"
-    print ss
-    res = scanner(ss)
-    pprint.pprint(list(res))
+    pprint.pprint(tt)
+    import pdb;pdb.set_trace()
+    # scanner = Scanner()
+    # import pprint
+    # pprint.pprint(scanner._slug_lexer_mapping)
+    # ss = u"Blah blah blah 5 USC 123 blah blah 3 USC 4 and 12 CFR 23.4-1 sayus"
+    # print ss
+    # res = scanner(ss)
+    # pprint.pprint(list(res))
     # import pdb;pdb.set_trace()
 if __name__ == '__main__':
     main()
