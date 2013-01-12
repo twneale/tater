@@ -384,8 +384,10 @@ class MyRegexLexer(RegexLexer):
                         for item in action(self, m):
                             yield item
                     pos = m.end()
+
                     if new_state is not None:
-                        # state transition
+
+                        # Mutate the stack
                         if isinstance(new_state, tuple):
                             for state in new_state:
                                 if state == '#pop':
@@ -394,13 +396,18 @@ class MyRegexLexer(RegexLexer):
                                     statestack.append(statestack[-1])
                                 else:
                                     statestack.append(state)
+
                         elif isinstance(new_state, int):
                             # pop
                             del statestack[new_state:]
+
                         elif new_state == '#push':
                             statestack.append(statestack[-1])
+
                         else:
                             assert False, "wrong state def: %r" % new_state
+
+                        # Change state
                         statetokens = tokendefs[statestack[-1]]
                     break
                 else:
