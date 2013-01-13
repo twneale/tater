@@ -232,8 +232,6 @@ class USBillTokenizer(RegexLexer):
                 t.USCode),
               r'(\d+) (U\.S\.C\.)', swap='enum'),
             ],
-
-
         }
 
 
@@ -254,12 +252,41 @@ def main():
     s = 'Section 611(e)(2)(C) of the Individuals with Disabilities Education Act (20 U.S.C. 1411(e)(2)(C))'
     s = 'Part D of title III of the Public Health Service Act (42 U.S.C. 254b et seq.)'
     print s
-    tt = ff.tokenize(s)
+    tt = list(ff.tokenize(s))
     for xx in tt:
         print xx
     # pprint.pprint(tt)
-    import uncompile
     import ipdb;ipdb.set_trace()
 
 if __name__ == '__main__':
     main()
+
+
+class Root(object):
+
+    @match(t.Division.Name, t.Division.Enum)
+    def division_name(self):
+        '''Create a division node with name, enum.
+        '''
+
+
+class Division(object):
+
+    @match(t.Of, t.Division.Name, t.Division.Enum)
+    def handle_parent(self):
+        '''Create a new division(name, enum) and set it
+        as the parent of self.
+        '''
+
+    @match(t.OfThe, t.PopularName)
+    def handle_popularname(self):
+        '''Set this nod under an act.
+        So ascend to a supernode.
+        '''
+
+class PopularName(object):
+
+    @match(t.Division.Title, t.USCode, t.Division.Enum)
+    def handle_uscode_cite(self):
+        '''Set its us code cite.
+        '''
