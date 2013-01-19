@@ -214,7 +214,7 @@ class USBillTokenizer(RegexLexer):
 
         'after_top_enum': [
             r(t.Punctuation.OpenParen, '\(', 'paren_enum'),
-            r(t.Punctuation.OfThe, 'of the', 'popular_name'),
+            r(t.OfThe, 'of the', 'popular_name'),
             ],
 
         'paren_enum': [
@@ -235,7 +235,250 @@ class USBillTokenizer(RegexLexer):
         }
 
 
+#---------------------------------------------------------------------
+# TODO:
+# - Add debug, trace info
+# - debug, get this POS working.
+class ConfigurationError(Exception):
+    '''The user-defined ast models were screwed up.
+    '''
 
+
+class ParseError(Exception):
+    '''
+    The tokens weren't matched against any suitable method
+    on the current node.
+    '''
+
+
+t = Token
+
+class ItemStream(object):
+
+    def __init__(self, iterable):
+        self._stream = list(iterable)
+        self.i = 0
+
+    def __iter__(self):
+        while True:
+            try:
+                yield self._stream[self.i]
+            except IndexError:
+                raise StopIteration
+            self.i += 1
+
+    def next(self):
+        i = self.i + 1
+        try:
+            item = self._stream[i]
+        except IndexError:
+            raise StopIteration
+        else:
+            self.i = i
+            return item
+
+    # None of these methods advance the iterator. They're just
+    # for peeking ahead and behind.
+    def previous(self):
+        return self.behind(1)
+
+    def this(self):
+        return self._stream[self.i]
+
+    def ahead(self, n):
+        return self._stream[self.i + n]
+
+    def behind(self, n):
+        return self._stream[self.i - n]
+
+    def take_matching(self, tokentypes_or_items):
+        '''Take items from the stream matching the supplied
+        sequence of tokentypes or (tokentype, text) 2-tuples.
+        The imagined idiom here is pattern matching.
+        '''
+        tt = tokentypes_or_items
+
+        # Return container for matched items.
+        matched_items = []
+
+        # Starting state of the iterator.
+        offset = 0
+        for tokentype_or_item in tokentypes_or_items:
+            item = pos, tokentype, text = self.ahead(offset)
+            match_found = False
+
+            # Allow matching of a sequence of tokentypes.
+            if isinstance(tokentype_or_item, _TokenType):
+                if tokentype == tokentype_or_item:
+                    print 'matched', tokentype_or_item
+                    match_found = True
+                    matched_items.append(item)
+
+            # Alternatively, allow matching of a sequence of
+            # (tokentype, text) 2-tuples.
+            else:
+                _item = _, _tokentype, _text = tokentype_or_item
+                if (_tokentype, _text) == (tokentype, text):
+                    match_found = True
+                    print 'matched', _tokentype, _text
+                    matched_items.append(item)
+
+            if match_found:
+                offset += 1
+
+        if match_found:
+            # Advance the iterator.
+            self.i += len(matched_items)
+            return matched_items
+
+
+def parse(root_cls, itemiter):
+    '''Supply a user-defined root class.
+    '''
+    itemstream = ItemStream(itemiter)
+    node = root = root_cls()
+    while 1:
+        try:
+            node = node.resolve(itemstream)
+        except StopIteration:
+            break
+    return node.getroot()
+
+
+def match(*tokentypes_or_items):
+    '''Mark an instance method as suitable for
+    resolving an incoming itemstream with items
+    that matche tokens_or_items. It can match only
+    the sequence of tokentypes, or it can match actual
+    (tokentype, text) 2-tuples.
+    '''
+    if not tokentypes_or_items:
+        msg = 'Supply at least one tokentype to match.'
+        raise ConfigurationError(msg)
+
+    def wrapped(f):
+        f.tokentypes_or_items = tokentypes_or_items
+        return f
+    return wrapped
+
+
+class NodeMeta(type):
+
+    def __new__(meta, name, bases, attrs):
+        funcs = []
+        for funcname, func in attrs.items():
+            tokentypes_or_items = getattr(func, 'tokentypes_or_items', None)
+            if tokentypes_or_items:
+                funcs.append((func, tokentypes_or_items))
+
+        attrs.update(_funcs=funcs)
+        cls = type.__new__(meta, name, bases, attrs)
+        return cls
+
+
+class Node(object):
+    __metaclass__ = NodeMeta
+
+    def __init__(self, *items):
+        self.items = items
+        self.children = []
+
+    def getroot(self):
+        this = self
+        while hasattr(this, 'parent'):
+            this = this.parent
+        return this
+
+    def resolve(self, itemstream):
+        '''Try to resolve the incoming stream against the functions
+        defined on the class instance.
+        '''
+        for func, tokentypes_or_items in self._funcs:
+            items = itemstream.take_matching(tokentypes_or_items)
+            if items:
+                return func(self, *items)
+        msg = 'No function defined on %r for %s'
+        import ipdb;ipdb.set_trace()
+        for func, tokentypes_or_items in self._funcs:
+            items = itemstream.take_matching(tokentypes_or_items)
+            if items:
+                return func(self, *items)
+        raise ParseError(msg % (self, repr(tokentypes_or_items)))
+
+    def append(self, child):
+        child.parent = self
+        self.children.append(child)
+        return child
+
+    def ascend(self, cls, items=None):
+        '''Create a new parent node. Set it as the
+        parent of this node. Return the parent.
+        '''
+        items = items or []
+        parent = cls(*items)
+        parent.append(self)
+        return parent
+
+    def descend(self, cls, items=None):
+        items = items or []
+        child = cls(*items)
+        return self.append(child)
+
+
+class Start(Node):
+
+    @match(t.Division.Name, t.Division.Enum)
+    def division_name(self, *items):
+        '''Create a division node with name, enum.
+        '''
+        return self.ascend(Division, items)
+
+
+class Citations(Node):
+    '''A root that multiple parallel citations can descend from.
+    '''
+
+
+class Division(Node):
+
+    def __repr__(self):
+        return 'Division(%r)' % (self.items,)
+
+    @match(t.Of, t.Division.Name, t.Division.Enum)
+    def handle_parent_div(self, *items):
+        '''Create a new division(name, enum) and set it
+        as the parent of self.
+        '''
+        return self.ascend(Division, items[1:])
+
+    @match(t.OfThe, t.PopularName)
+    def handle_popularname(self, *items):
+        '''Set this node under an act.
+        So ascend to a supernode.
+        '''
+        return self.ascend(PopularName, items)
+
+
+class PopularName(Node):
+
+    @match(t.Division.Title, t.USCode, t.Division.Enum)
+    def handle_uscode_cite(self, *items):
+        '''Ascend up to a new Citations node
+        and descend back down into the US Code cite.
+        '''
+        title, usc, section = items
+
+        citations = self.ascend(Citations)
+        usc = citations.descend(USC, usc)
+        title = usc.descend(Division, title)
+        section = title.descend(Division, section)
+        import ipdb;ipdb.set_trace()
+
+
+
+class USC(Node):
+    '''United States Code node (that rhymes)
+    '''
 
 def main():
 
@@ -250,43 +493,12 @@ def main():
     s = 'Section 41 of title 28, United States Code'
     s = 'Section 3(a)(2) of the Securities Act of 1933 (15 U.S.C. 77c(a)(2)) '
     s = 'Section 611(e)(2)(C) of the Individuals with Disabilities Education Act (20 U.S.C. 1411(e)(2)(C))'
-    s = 'Part D of title III of the Public Health Service Act (42 U.S.C. 254b et seq.)'
+    # s = 'Part D of title III of the Public Health Service Act (42 U.S.C. 254b et seq.)'
     print s
-    tt = list(ff.tokenize(s))
-    for xx in tt:
-        print xx
-    # pprint.pprint(tt)
+    items = list(ff.tokenize(s))
+    pprint.pprint(items)
     import ipdb;ipdb.set_trace()
+    parse(Start, items)
 
 if __name__ == '__main__':
     main()
-
-
-class Root(object):
-
-    @match(t.Division.Name, t.Division.Enum)
-    def division_name(self):
-        '''Create a division node with name, enum.
-        '''
-
-
-class Division(object):
-
-    @match(t.Of, t.Division.Name, t.Division.Enum)
-    def handle_parent(self):
-        '''Create a new division(name, enum) and set it
-        as the parent of self.
-        '''
-
-    @match(t.OfThe, t.PopularName)
-    def handle_popularname(self):
-        '''Set this nod under an act.
-        So ascend to a supernode.
-        '''
-
-class PopularName(object):
-
-    @match(t.Division.Title, t.USCode, t.Division.Enum)
-    def handle_uscode_cite(self):
-        '''Set its us code cite.
-        '''
