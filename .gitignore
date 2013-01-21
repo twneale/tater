@@ -29,6 +29,8 @@ nosetests.xml
 # Translations
 *.mo
 
-.sublime-project
-.sublime-workspace
+*.sublime-project
+*.sublime-workspace
 
+us*
+tests/us*
