@@ -7,7 +7,7 @@ AST-builder implementation.
 """
 
 appname = "tater"
-version = "0.0"
+version = "0.01"
 
 setup(**{
     "name": appname,
