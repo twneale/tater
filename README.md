@@ -1,4 +1,4 @@
 tater
 =====
 
-A tokenizer and basic "smart objects" AST-building base classes
+A tokenizer and basic "smart objects" AST-building base classes.

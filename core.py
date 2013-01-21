@@ -33,7 +33,6 @@ class RegexLexer(object):
     really detailed debug/trace and isn't fucking impossible
     to use. Tall order.
     '''
-    # __metaclass__ = RegexLexerMeta
     DEBUG = True
 
     @CachedAttr
@@ -90,7 +89,10 @@ class RegexLexer(object):
         statestack = ['root']
         defs = tokendefs['root']
         text_len = len(text)
-        re_skip = re.compile(self.re_skip).match
+        if hasattr(self, 're_skip'):
+            re_skip = re.compile(self.re_skip).match
+        else:
+            re_skip = None
 
         pos = 0
         while True:
@@ -115,12 +117,13 @@ class RegexLexer(object):
                         print '  --regex', rgx.pattern
                     m = rgx.match(text, pos)
                     if not m:
-                        # Skipper.
-                        m = re_skip(text, pos)
-                        if m:
-                            stuff_skipped = True
-                            pos = m.end()
-                            continue
+                        if re_skip:
+                            # Skipper.
+                            m = re_skip(text, pos)
+                            if m:
+                                stuff_skipped = True
+                                pos = m.end()
+                                continue
                     else:
                         match_found = True
                         if isinstance(token, _TokenType):
@@ -248,11 +251,11 @@ class ItemStream(object):
             return matched_items
 
 
-def parse(root_cls, itemiter):
-    '''Supply a user-defined root class.
+def parse(start, itemiter):
+    '''Supply a user-defined start class.
     '''
     itemstream = ItemStream(itemiter)
-    node = root_cls()
+    node = start()
     while 1:
         try:
             node = node.resolve(itemstream)
