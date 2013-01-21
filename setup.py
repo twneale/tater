@@ -18,9 +18,9 @@ setup(**{
     "author": "Thom Neale",
     "author_email": "twneale@gmail.com",
     "long_description": long_description,
-    "description": 'Tokenizer',
+    "description": 'Basic tokenizer and smart-objects implentation.',
     "license": "MIT",
-    "url": "http://tater.thomneale.com",
+    "url": "http://twneale.github.com/tater/",
     "platforms": ['any'],
     "scripts": [
     ]
