@@ -2,11 +2,12 @@
 
 from setuptools import setup
 
-long_description = """A reusable
+long_description = """Tokenizer and basic smart-objects
+AST-builder implementation.
 """
 
-appname = "hy"
-version = "0.7.5"
+appname = "tater"
+version = "0.0"
 
 setup(**{
     "name": appname,
