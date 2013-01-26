@@ -1,4 +1,5 @@
 import re
+import logging
 import unittest
 
 from tater.tokentype import Token as t
@@ -8,7 +9,7 @@ from tater.core import RegexLexer
 
 class TestLexer(RegexLexer):
     """Test tuple state transitions including #pop."""
-    DEBUG = False
+    DEBUG = logging.DEBUG
     re_skip = re.compile('\s+')
     tokendefs = {
         'root': [

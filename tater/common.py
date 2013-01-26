@@ -5,7 +5,7 @@ from tater.node import Node, matches
 from tater.tokentype import Token
 
 
-re_enum = re.compile(ur'\s*([\d\w\-–.]+)', re.UNICODE)
+re_enum = re.compile(r'\s*([\d\w\-\–.]+)')
 _divisions = u'''
     title
     tit.
@@ -40,10 +40,9 @@ class HasSubdivisions(Node):
     path parsing.
     '''
     t = Token
-    punct = t.Punctuation
     division_cls = None
 
-    @matches(punct.OpenParen, t.Division.PathEnum, punct.CloseParen)
+    @matches(t.OpenParen, t.Division.PathEnum, t.CloseParen)
     def handle_subdiv(self, *items):
         open_paren, enum, close_paren = items
         child = self.descend(self.__class__, enum)
