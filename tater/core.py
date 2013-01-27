@@ -39,7 +39,7 @@ class include(str):
     pass
 
 
-class _Tokendefs(object):
+class _TokendefCompiler(object):
 
     def __init__(self, cls):
         self.cls = cls
@@ -100,17 +100,14 @@ class RegexLexerMeta(type):
     def __new__(meta, name, bases, attrs):
         cls = type.__new__(meta, name, bases, attrs)
         if hasattr(cls, 'tokendefs'):
-            cls._tokendefs = _Tokendefs(cls).compile_()
+            cls._tokendefs = _TokendefCompiler(cls).compile_()
         return cls
 
 
 class RegexLexer(object):
     '''We want a lexer that ignores whitespace, provides
     really detailed debug/trace and isn't fucking impossible
-    to use. Tall order.
-
-    This lexer is currently designed for each instance to be user
-    once and tossed. The lexer instance holds is where state is stored.
+    to use.
     '''
     __metaclass__ = RegexLexerMeta
 
@@ -198,7 +195,9 @@ class RegexLexer(object):
             self.pos += 1
 
     def _process_state(self, defs):
-        self.critical(' _process_state: starting state %r' % self.statestack[-1])
+        if self.statestack:
+            msg = ' _process_state: starting state %r'
+            self.critical(msg % self.statestack[-1])
         for rule in defs:
             self.debug(' _process_state: starting rule %r' % (rule,))
             for item in self._process_rule(rule):
