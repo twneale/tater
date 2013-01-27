@@ -40,7 +40,7 @@ class Tokenizer(RegexLexer):
 
         'object': [
             r(t.Number, '\d+\.?\d*'),
-            r(t.DoubleQuote.Open, '"', push='keyname'),
+            r(bygroups(t.KeyName), r'"([^\\]+?)"\s*:'),
             r(bygroups(t.String), r'(\\")?.+?[^\\]"'),
             r(t.OpenBrace, '}', pop=True),
             ],
