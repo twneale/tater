@@ -22,14 +22,14 @@
 import logging
 
 from tater.node import Node, matches
-from tater.core import RegexLexer, Rule, bygroups, parse
+from tater.core import RegexLexer, Rule, bygroups, parse, include
 from tater.tokentype import Token
 
 
 class Tokenizer(RegexLexer):
     DEBUG = logging.DEBUG
 
-    re_skip = r'[, ]+'
+    re_skip = r'[,\s]+'
 
     r = Rule
     t = Token
@@ -38,11 +38,25 @@ class Tokenizer(RegexLexer):
             r(t.OpenBrace, '{', 'object'),
             ],
 
+        'literals': [
+            r(t.Number.Real, '\d+\.\d*'),
+            r(t.Number.Int, '\d+'),
+            r(t.String, r'"(?:\\")?.+?[^\\]"'),
+            r(t.Bool, '(?:true|false)'),
+            r(t.Null, 'null'),
+            ],
+
         'object': [
-            r(t.Number, '\d+\.?\d*'),
+            r(t.OpenBrace, '{', 'object'),
             r(bygroups(t.KeyName), r'"([^\\]+?)"\s*:'),
-            r(bygroups(t.String), r'(\\")?.+?[^\\]"'),
-            r(t.OpenBrace, '}', pop=True),
+            include('literals'),
+            r(t.OpenBracket, r'\[', push='array'),
+            r(t.CloseBrace, '}', pop=True),
+            ],
+
+        'array': [
+            include('literals'),
+            r(t.CloseBracket, r'\]', pop=True),
             ],
 
         'keyname': [
@@ -55,43 +69,69 @@ class Tokenizer(RegexLexer):
 t = Token
 
 
+class Root(Node):
+
+    @matches(t.OpenBracket)
+    def start_array(self, *items):
+        return self.descend(JsonArray)
+
+    @matches(t.OpenBrace)
+    def start_object(self, *items):
+        return self.descend(JsonObject)
+
+    @matches(t.String)
+    @matches(t.Number.Int)
+    @matches(t.Number.Real)
+    @matches(t.Bool)
+    @matches(t.Null)
+    def handle_literal(self, *items):
+        return self.descend(JsonLiteral, items)
+
+
+class JsonLiteral(Node):
+    pass
+
+
+class JsonObject(Node):
+
+    @matches(t.KeyName)
+    def handle_keyname(self, *items):
+        return self.descend(JsonObjectItem, items)
+
+    @matches(t.CloseBrace)
+    def end_object(self, *items):
+        return self
+
+
+class JsonObjectItem(Root):
+    pass
+
+
+class JsonArray(Root):
+
+    @matches(t.CloseBracket)
+    def end_array(self, *items):
+        return self.parent
+
+
 class Start(Node):
 
     @matches(t.OpenBrace)
     def start_object(self, *items):
-        return self.ascend(JSONObject, items, related=False)
-
-
-class ObjectItem(Node):
-
-    @matches(t.String)
-    def handle_string(self, *items):
-        import ipdb;ipdb.set_trace()
-
-
-class JSONObject(Node):
-
-    @matches(t.DoubleQuote)
-    def handle_dquote(self, *items):
-        json_object = self.descend(JSONObject, items)
-        object_item = ObjectItem()
-        json_object.append(object_item)
-
-        return object_item
+        return self.ascend(JsonObject, related=False)
 
 
 def main():
 
     import pprint
     ff = Tokenizer()
-    s = '{"donkey": 1.23, "b": 3, "cow": "\\"pig\'s\\""}'
+    s = '{"donkey": 1.23, "b": 3, "pig": true, "zip": null, "arr": [1, 2, "str"], "cow": "\\"pig\'s\\"", }'
     print s
     items = list(ff.tokenize(s))
     pprint.pprint(items)
-    # x = parse(Start, items)
-    # x.printnode()
-    # import ipdb;ipdb.set_trace()
+    x = parse(Start, items)
+    x.printnode()
+    import ipdb;ipdb.set_trace()
 
 if __name__ == '__main__':
     main()
-

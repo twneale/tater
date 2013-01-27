@@ -32,50 +32,67 @@ def bygroups(*tokens):
     return tokens
 
 
-def compile_tokendefs(cls):
-    '''Compile the tokendef regexes.
-    '''
-    # Make the patterns accessible on the lexer instance for debugging.
-    iter_rgxs = _iter_rgxs
+class include(str):
+    """
+    Indicates that a state should include rules from another state.
+    """
+    pass
 
-    flags = getattr(cls, 'flags', 0)
-    defs = collections.defaultdict(list)
 
-    rubberstamp = lambda s: s
-    re_compile = lambda s: re.compile(s, flags)
-    getfunc = {
-        unicode: re_compile,
-        str: re_compile,
-        _re_type: rubberstamp
-        }
+class _Tokendefs(object):
 
-    for state, tokendefs in cls.tokendefs.items():
-        append = defs[state].append
+    def __init__(self, cls):
+        self.cls = cls
+        self.tokendefs = cls.tokendefs
+        self.compiled = collections.defaultdict(list)
 
-        for tokendef in tokendefs:
+    def _process_rules(self, state, rules):
+
+        flags = getattr(self.cls, 'flags', 0)
+
+        rubberstamp = lambda s: s
+        re_compile = lambda s: re.compile(s, flags)
+        getfunc = {
+                unicode: re_compile,
+                str: re_compile,
+                _re_type: rubberstamp
+                }
+
+        append = self.compiled[state].append
+        iter_rgxs = self._iter_rgxs
+
+        for rule in rules:
+            if isinstance(rule, include):
+                self._process_rules(state, self.tokendefs[rule])
+                continue
+
             _rgxs = []
             _append = _rgxs.append
 
-            for rgx, type_ in iter_rgxs(tokendef):
+            for rgx, type_ in iter_rgxs(rule):
                 func = getfunc[type_](rgx)
                 _append(func)
 
             rgxs = _rgxs
-            tokendef = tokendef._replace(rgxs=rgxs)
-            append(tokendef)
+            rule = rule._replace(rgxs=rgxs)
+            append(rule)
 
-    return defs
+    def compile_(self):
+        '''Compile the tokendef regexes.
+        '''
+        for state, rules in self.tokendefs.items():
+            self._process_rules(state, rules)
+        return self.compiled
 
-
-def _iter_rgxs(rule, _re_type=_re_type):
-    rgx = rgxs = rule.rgxs
-    rgx_type = type(rgx)
-    if issubclass(rgx_type, (basestring, _re_type)):
-        yield rgx, rgx_type
-    else:
-        for rgx in rgxs:
-            rgx_type = type(rgx)
+    def _iter_rgxs(self, rule, _re_type=_re_type):
+        rgx = rgxs = rule.rgxs
+        rgx_type = type(rgx)
+        if issubclass(rgx_type, (basestring, _re_type)):
             yield rgx, rgx_type
+        else:
+            for rgx in rgxs:
+                rgx_type = type(rgx)
+                yield rgx, rgx_type
 
 
 class RegexLexerMeta(type):
@@ -83,7 +100,7 @@ class RegexLexerMeta(type):
     def __new__(meta, name, bases, attrs):
         cls = type.__new__(meta, name, bases, attrs)
         if hasattr(cls, 'tokendefs'):
-            cls._tokendefs = compile_tokendefs(cls)
+            cls._tokendefs = _Tokendefs(cls).compile_()
         return cls
 
 
@@ -102,6 +119,9 @@ class RegexLexer(object):
     class Finished(Exception):
         pass
 
+    class MatchFound(Exception):
+        pass
+
     def __init__(self):
 
         self._reset()
@@ -117,6 +137,7 @@ class RegexLexer(object):
         self.debug = logger.debug
         self.info = logger.info
         self.warn = logger.warn
+        self.critical = logger.critical
 
     def _reset(self):
         self.pos = 0
@@ -142,7 +163,7 @@ class RegexLexer(object):
 
     def scan(self):
         # Get the tokendefs for the current state.
-        self.warn('  scan: text: %r' % self.text)
+        self.warn('  scan: text: %s' % self.text)
         self.warn('  scan:        ' + (' ' * self.pos) + '^')
         self.warn('  scan: pos = %r' % self.pos)
         try:
@@ -152,13 +173,11 @@ class RegexLexer(object):
             defs = self._tokendefs['root']
             self.info("  scan: state is 'root'")
 
-        match_found = False
-        for item in self._process_state(defs):
-            match_found = True
-            yield item
-
-        if match_found:
-            self.debug('  scan: match found.')
+        try:
+            for item in self._process_state(defs):
+                yield item
+        except self.MatchFound:
+            self.debug('  _scan: match found--returning.')
             return
 
         msg = '  scan: match not found. Popping from %r.'
@@ -179,16 +198,11 @@ class RegexLexer(object):
             self.pos += 1
 
     def _process_state(self, defs):
-        match_found = False
+        self.critical(' _process_state: starting state %r' % self.statestack[-1])
         for rule in defs:
             self.debug(' _process_state: starting rule %r' % (rule,))
             for item in self._process_rule(rule):
-                match_found = True
                 yield item
-
-            if match_found:
-                self.debug('  _process_state: match found--returning.')
-                return
 
     def _process_rule(self, rule):
         token, rgxs, push, pop, swap = rule
@@ -207,7 +221,7 @@ class RegexLexer(object):
                 self.pos = m.end()
 
         for rgx in rgxs:
-
+            self.debug('  _process_rule: statestack: %r' % self.statestack)
             if pos_changed:
                 self.info('  _process_rule: text: %r' % self.text)
                 self.info('  _process_rule:        ' + (' ' * self.pos) + '^')
@@ -216,7 +230,7 @@ class RegexLexer(object):
             m = rgx.match(self.text, self.pos)
             self.debug('  _process_rule: trying regex %r' % rgx.pattern)
             if m:
-                self.info('  _process_rule: match found: %r' % m.group())
+                self.info('  _process_rule: match found: %s' % m.group())
                 self.info('  _process_rule: pattern: %r' % rgx.pattern)
                 if isinstance(token, _TokenType):
                     yield self.pos, token, m.group()
@@ -229,7 +243,7 @@ class RegexLexer(object):
                 self.info(msg % (self.pos, m.end()))
                 self.pos = m.end()
                 self._update_state(rule)
-                return
+                raise self.MatchFound()
 
     def _update_state(self, rule):
         token, rgxs, push, pop, swap = rule

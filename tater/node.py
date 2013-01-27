@@ -25,7 +25,9 @@ def matches(*tokens_or_items):
         raise ConfigurationError(msg)
 
     def wrapped(f):
-        f.tokens_or_items = tokens_or_items
+        _tokens_or_items = getattr(f, 'tokens_or_items', [])
+        _tokens_or_items.append(tokens_or_items)
+        f.tokens_or_items = _tokens_or_items
         return f
     return wrapped
 
@@ -41,7 +43,7 @@ class _NodeMeta(type):
             for funcname, func in attrs.items():
                 tokens_or_items = getattr(func, 'tokens_or_items', None)
                 if tokens_or_items:
-                    funcs.append((func, tokens_or_items))
+                    funcs.extend((func, data) for data in tokens_or_items)
 
         attrs.update(_funcs=funcs)
         cls = type.__new__(meta, name, bases, attrs)
