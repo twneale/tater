@@ -275,15 +275,15 @@ class RegexLexer(object):
                         self.info(msg % (popped))
 
             if push:
-                self.info('  _update_state: pushing %r' % push)
+                self.info('  _update_state: pushing %r' % (push,))
                 if isinstance(push, basestring):
                     statestack.append(push)
                 else:
-                    self.info('  _update_state: pushing all %r' % push)
+                    self.info('  _update_state: pushing all %r' % (push,))
                     msg = '    _update_state: pushing %r'
                     for state in push:
                         self.info(msg % state)
-                        statestack.append(push)
+                        statestack.append(state)
 
 
 t = Token
