@@ -32,20 +32,44 @@ def matches(*tokens_or_items):
     return wrapped
 
 
+def matches_subtypes(*tokens):
+    '''Mark an instance method as suitable for
+    resolving an incoming itemstream with items
+    having tokens that are subtypes of one or more
+    passed-in tokens.
+    '''
+    if not tokens:
+        msg = 'Supply at least one token to match.'
+        raise ConfigurationError(msg)
+
+    def wrapped(f):
+        _tokens_supertypes = getattr(f, 'tokens_supertypes', [])
+        _tokens_supertypes.extend(tokens)
+        f._tokens_supertypes = _tokens_supertypes
+        return f
+    return wrapped
+
+
 class _NodeMeta(type):
 
     def __new__(meta, name, bases, attrs):
         funcs = []
 
+        # Can't think of a better name for this yet.
+        supertypes = []
+
         get_attr_dict = lambda cls: dict(inspect.getmembers(cls))
 
         for attrs in map(get_attr_dict, bases) + [attrs]:
             for funcname, func in attrs.items():
-                tokens_or_items = getattr(func, 'tokens_or_items', None)
-                if tokens_or_items:
-                    funcs.extend((func, data) for data in tokens_or_items)
+                tokens_or_items = getattr(func, 'tokens_or_items', [])
+                funcs.extend((func, data) for data in tokens_or_items)
 
-        attrs.update(_funcs=funcs)
+                _supertypes = getattr(func, '_tokens_supertypes', [])
+                supertypes.extend(
+                    (func, _supertype) for _supertype in _supertypes)
+
+        attrs.update(_funcs=funcs, _supertypes=supertypes)
         cls = type.__new__(meta, name, bases, attrs)
         return cls
 
@@ -70,14 +94,23 @@ class Node(object):
         '''Try to resolve the incoming stream against the functions
         defined on the class instance.
         '''
+        # Functions marked with 'matches' decorator.
         for func, tokens_or_items in self._funcs:
             items = itemstream.take_matching(tokens_or_items)
             if items:
                 return func(self, *items)
 
+        # Functions marked with 'matches_subtypes' decorator.
+        _, _token, _ = itemstream.this()
+        for func, supertype in self._supertypes:
+            if _token in supertype:
+                items = itemstream.take_matching([_token])
+                if items:
+                    return func(self, *items)
+
+        # No matched functions were found. Propagate up this node's parent.
         parent = getattr(self, 'parent', None)
         if parent is not None:
-            # Fail over to the node's parent.
             return parent.resolve(itemstream)
         else:
             msg = 'No function defined on %r for %s'
