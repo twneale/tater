@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 '''
     +===============+===================+
     | object        | dict              |
@@ -17,8 +18,6 @@
     | null          | None              |
     +---------------+-------------------+
 '''
-
-# -*- coding: utf-8 -*-
 import re
 import logging
 
@@ -28,7 +27,7 @@ from tater.tokentype import Token
 
 
 class Tokenizer(RegexLexer):
-    #DEBUG = logging.FATAL
+    DEBUG = logging.DEBUG
 
     re_skip = r'[,\s]+'
 
