@@ -28,7 +28,7 @@ from tater.tokentype import Token
 
 
 class Tokenizer(RegexLexer):
-    DEBUG = logging.DEBUG
+    #DEBUG = logging.FATAL
 
     re_skip = r'[,\s]+'
 

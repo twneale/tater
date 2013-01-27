@@ -129,7 +129,7 @@ class RegexLexer(object):
             self.re_skip = None
 
         logger = logging.getLogger('tater.%s' % self.__class__.__name__)
-        logger.setLevel(getattr(self, 'DEBUG', logging.WARN))
+        logger.setLevel(getattr(self, 'DEBUG', logging.FATAL))
 
         self.debug = logger.debug
         self.info = logger.info
