@@ -19,9 +19,10 @@
 '''
 
 # -*- coding: utf-8 -*-
+import re
 import logging
 
-from tater.node import Node, matches
+from tater.node import Node, matches, matches_subtypes
 from tater.core import RegexLexer, Rule, bygroups, parse, include
 from tater.tokentype import Token
 
@@ -39,29 +40,24 @@ class Tokenizer(RegexLexer):
             ],
 
         'literals': [
-            r(t.Number.Real, '\d+\.\d*'),
-            r(t.Number.Int, '\d+'),
-            r(t.String, r'"(?:\\")?.+?[^\\]"'),
-            r(t.Bool, '(?:true|false)'),
-            r(t.Null, 'null'),
+            r(t.Literal.Number.Real, '\d+\.\d*'),
+            r(t.Literal.Number.Int, '\d+'),
+            r(bygroups(t.Literal.String), r'"((?:\\")?.+?[^\\])"'),
+            r(t.Literal.Bool, '(?:true|false)'),
+            r(t.Literal.Null, 'null'),
             ],
 
         'object': [
             r(t.OpenBrace, '{', 'object'),
+            r(t.OpenBracket, r'\[', push='array'),
             r(bygroups(t.KeyName), r'"([^\\]+?)"\s*:'),
             include('literals'),
-            r(t.OpenBracket, r'\[', push='array'),
             r(t.CloseBrace, '}', pop=True),
             ],
 
         'array': [
             include('literals'),
             r(t.CloseBracket, r'\]', pop=True),
-            ],
-
-        'keyname': [
-            r(bygroups(t.Colon), r':', pop=True),
-            r(bygroups(t.Keyname, t.DoubleQuote.End), r'([^\\]+?)(")'),
             ],
         }
 
@@ -79,17 +75,25 @@ class Root(Node):
     def start_object(self, *items):
         return self.descend(JsonObject)
 
-    @matches(t.String)
-    @matches(t.Number.Int)
-    @matches(t.Number.Real)
-    @matches(t.Bool)
-    @matches(t.Null)
+    @matches_subtypes(t.Literal)
     def handle_literal(self, *items):
         return self.descend(JsonLiteral, items)
 
 
 class JsonLiteral(Node):
-    pass
+
+    _to_json = {
+        t.Literal.Number.Real: float,
+        t.Literal.Number.Int: int,
+        t.Literal.Bool: bool,
+        t.Literal.Null: lambda x: None,
+        t.Literal.String: lambda s: re.sub(r'\\"', '"', s).decode('utf-8'),
+        }
+
+    def decode(self):
+        assert len(self.items) is 1
+        _, token, text = self.items.pop()
+        return self._to_json[token](text)
 
 
 class JsonObject(Node):
@@ -102,9 +106,16 @@ class JsonObject(Node):
     def end_object(self, *items):
         return self
 
+    def decode(self):
+        return dict(item.decode() for item in self.children)
+
 
 class JsonObjectItem(Root):
-    pass
+
+    def decode(self):
+        assert len(self.items) is 1
+        _, _, key = self.items.pop()
+        return (key, self.children.pop().decode())
 
 
 class JsonArray(Root):
@@ -112,6 +123,9 @@ class JsonArray(Root):
     @matches(t.CloseBracket)
     def end_array(self, *items):
         return self.parent
+
+    def decode(self):
+        return [expr.decode() for expr in self.children]
 
 
 class Start(Node):
@@ -131,6 +145,7 @@ def main():
     pprint.pprint(items)
     x = parse(Start, items)
     x.printnode()
+    data = x.decode()
     import ipdb;ipdb.set_trace()
 
 if __name__ == '__main__':
