@@ -4,12 +4,14 @@ Todo:
  - Handle weird unicode dashes.
 
 '''
+import sys
 import re
 import collections
 import logging
 import logging.config
+import functools
 
-from tater.config import LOGGING_CONFIG
+from tater.config import LOGGING_CONFIG, LOG_MSG_MAXWIDTH
 from tater.tokentype import Token, _TokenType
 
 
@@ -111,8 +113,6 @@ class RegexLexer(object):
     '''
     __metaclass__ = RegexLexerMeta
 
-    DEBUG = logging.INFO
-
     class Finished(Exception):
         pass
 
@@ -128,13 +128,24 @@ class RegexLexer(object):
         else:
             self.re_skip = None
 
+        DEBUG = None
+        if '-q' not in sys.argv[1:]:
+            DEBUG = getattr(self, 'DEBUG', None)
+
+        def debug_func(func, debug=DEBUG is not None,
+                       log_msg_maxwidth=LOG_MSG_MAXWIDTH):
+            @functools.wraps(func)
+            def wrapped(msg):
+                if debug:
+                    func(msg[:log_msg_maxwidth])
+            return wrapped
+
         logger = logging.getLogger('tater.%s' % self.__class__.__name__)
         logger.setLevel(getattr(self, 'DEBUG', logging.FATAL))
-
-        self.debug = logger.debug
-        self.info = logger.info
-        self.warn = logger.warn
-        self.critical = logger.critical
+        self.debug = debug_func(logger.debug)
+        self.info = debug_func(logger.info)
+        self.warn = debug_func(logger.warn)
+        self.critical = debug_func(logger.critical)
 
     def _reset(self):
         self.pos = 0
@@ -160,9 +171,11 @@ class RegexLexer(object):
 
     def scan(self):
         # Get the tokendefs for the current state.
-        self.warn('  scan: text: %s' % self.text)
-        self.warn('  scan:        ' + (' ' * self.pos) + '^')
+        # self.warn('  scan: text: %s' % self.text)
+        # self.warn('  scan:        ' + (' ' * self.pos) + '^')
+        self.warn('  scan: %r' % self.text[self.pos:])
         self.warn('  scan: pos = %r' % self.pos)
+
         try:
             defs = self._tokendefs[self.statestack[-1]]
             self.info('  scan: state is %r' % self.statestack[-1])
@@ -170,9 +183,13 @@ class RegexLexer(object):
             defs = self._tokendefs['root']
             self.info("  scan: state is 'root'")
 
+        dont_emit = getattr(self, 'dont_emit', [])
         try:
-            for item in self._process_state(defs):
-                yield item
+            for pos, token, text in self._process_state(defs):
+                if token in dont_emit:
+                    pass
+                else:
+                    yield pos, token, text
         except self.MatchFound:
             self.debug('  _scan: match found--returning.')
             return
@@ -198,6 +215,8 @@ class RegexLexer(object):
         if self.statestack:
             msg = ' _process_state: starting state %r'
             self.critical(msg % self.statestack[-1])
+            msg = ' _process_state: stack: %r'
+            self.warn(msg % self.statestack)
         for rule in defs:
             self.debug(' _process_state: starting rule %r' % (rule,))
             for item in self._process_rule(rule):
@@ -235,9 +254,11 @@ class RegexLexer(object):
                     yield self.pos, token, m.group()
                 else:
                     matched = m.group()
-                    for token, tok in zip(token, m.groups()):
-                        yield self.pos + matched.index(tok), token, tok
+                    for token, text in zip(token, m.groups()):
+                        yield self.pos + matched.index(text), token, text
 
+                msg = '  _process_rule: %r has length %r'
+                self.info(msg % (m.group(), len(m.group())))
                 msg = '  _process_rule: advancing pos from %r to %r'
                 self.info(msg % (self.pos, m.end()))
                 self.pos = m.end()
@@ -289,10 +310,41 @@ class RegexLexer(object):
 t = Token
 
 
+class ItemIterator(object):
+    '''Act like a list with getitem, but be lazy.
+    '''
+    def __init__(self, iterator):
+        self.iterator = iterator
+        self.i = 0
+        self.data = []
+
+    def __getitem__(self, int_or_slice):
+        if isinstance(int_or_slice, slice):
+            i = int_or_slice.stop
+        else:
+            i = int_or_slice
+
+        data = self.data
+        iterator = self.iterator
+
+        if i < self.i:
+            return data[i]
+
+        while True:
+            if self.i <= i:
+                value = next(iterator)
+                data.append(value)
+                self.i += 1
+            else:
+                break
+
+        return data[int_or_slice]
+
+
 class ItemStream(object):
 
     def __init__(self, iterable):
-        self._stream = list(iterable)
+        self._stream = ItemIterator(iter(iterable))
         self.i = 0
 
     def __iter__(self):
@@ -358,7 +410,7 @@ class ItemStream(object):
             # Alternatively, allow matching of a sequence of
             # (token, text) 2-tuples.
             else:
-                _, _token, _text = token_or_item
+                _token, _text = token_or_item
                 if (_token, _text) == (token, text):
                     match_found = True
                     matched_items.append(item)
@@ -376,6 +428,7 @@ def parse(start, itemiter):
     '''Supply a user-defined start class.
     '''
     itemstream = ItemStream(itemiter)
+
     node = start()
     while 1:
         try:

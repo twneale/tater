@@ -5,7 +5,7 @@ from tater.node import Node, matches
 from tater.tokentype import Token
 
 
-re_enum = re.compile(r'\s*([\d\w\-\–.]+)')
+re_enum = re.compile(r'\s*([\d\w\-\–\.]+)')
 _divisions = u'''
     title
     tit.

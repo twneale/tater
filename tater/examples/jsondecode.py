@@ -19,7 +19,6 @@
     +---------------+-------------------+
 '''
 import re
-import logging
 
 from tater.node import Node, matches, matches_subtypes
 from tater.core import RegexLexer, Rule, bygroups, parse, include
@@ -27,7 +26,7 @@ from tater.tokentype import Token
 
 
 class Tokenizer(RegexLexer):
-    DEBUG = logging.DEBUG
+    # DEBUG = logging.DEBUG
 
     re_skip = r'[,\s]+'
 
@@ -138,14 +137,16 @@ def main():
 
     import pprint
     ff = Tokenizer()
-    s = '{"donkey": 1.23, "b": 3, "pig": true, "zip": null, "arr": [1, 2, "str"], "cow": "\\"pig\'s\\"", }'
+    s = '{"donkey": 1.23, "b": 3, "pig": true, "zip": null, "arr": [1, 2, "str"], "cow": "\\"pig\'s\\"" }'
     print s
     items = list(ff.tokenize(s))
     pprint.pprint(items)
-    x = parse(Start, items)
+    x = parse(Start, iter(items))
     x.printnode()
     data = x.decode()
-    import ipdb;ipdb.set_trace()
+    import json
+    assert json.loads(s) == data
+    import pdb;pdb.set_trace()
 
 if __name__ == '__main__':
     main()

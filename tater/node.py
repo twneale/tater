@@ -1,5 +1,7 @@
 import inspect
 
+from tater.core import ItemStream
+
 
 class ConfigurationError(Exception):
     '''The user-defined ast models were screwed up.
@@ -61,7 +63,20 @@ class _NodeMeta(type):
         get_attr_dict = lambda cls: dict(inspect.getmembers(cls))
 
         for attrs in map(get_attr_dict, bases) + [attrs]:
-            for funcname, func in attrs.items():
+            items = attrs.items()
+
+            # Sort if an order is given.
+            order = attrs.get('order')
+            if order is not None:
+                def sorter(item, order=order):
+                    attr, val = item
+                    if attr in order:
+                        return order.index(attr)
+                    else:
+                        return -1
+                items.sort(sorter)
+
+            for funcname, func in items:
                 tokens_or_items = getattr(func, 'tokens_or_items', [])
                 funcs.extend((func, data) for data in tokens_or_items)
 
@@ -90,10 +105,17 @@ class Node(object):
             this = this.parent
         return this
 
+    @property
+    def edge_map(self):
+        return getattr(self, '_edges', {})
+
     def resolve(self, itemstream):
         '''Try to resolve the incoming stream against the functions
         defined on the class instance.
         '''
+        if not isinstance(itemstream, ItemStream):
+            itemstream = ItemStream(itemstream)
+
         # Functions marked with 'matches' decorator.
         for func, tokens_or_items in self._funcs:
             items = itemstream.take_matching(tokens_or_items)
@@ -118,7 +140,7 @@ class Node(object):
             stream = itemstream._stream[i:i + 5] + ['...']
             raise ParseError(msg % (self, stream))
 
-    def append(self, child, related=True):
+    def append(self, child, related=True, edge=None):
         '''Related is false when you don't want the child to become
         part of the resulting data structure, as in the case of the
         start node.
@@ -126,6 +148,8 @@ class Node(object):
         if related:
             child.parent = self
             self.children.append(child)
+            if edge is not None:
+                self.edge_map[edge] = child
         return child
 
     def ascend(self, cls, items=None, related=True):
@@ -137,10 +161,28 @@ class Node(object):
         parent.append(self, related)
         return parent
 
-    def descend(self, cls, items=None):
+    def descend(self, cls, items=None, edge=None):
         items = items or []
         child = cls(*items)
-        return self.append(child)
+        return self.append(child, edge=edge)
+
+    def remove(self, child):
+        'Um, should this return something? Not sure.'
+        self.children.remove(child)
+
+    def swap(self, cls, items=None):
+        '''Swap cls(*items) for this node.
+        '''
+        items = items or []
+        new_parent = self.parent.descend(cls, items)
+        self.parent.remove(self)
+        new_parent.append(self)
+        return new_parent
+
+    def pop(self):
+        '''Just for readability and clarity about what it means
+        to return the parent.'''
+        return self.parent
 
     def extend(self, items):
         self.items.extend(items)
@@ -148,5 +190,7 @@ class Node(object):
 
     def printnode(self, offset=0):
         print offset * ' ', '-', self
+        if self.edge_map:
+            print offset * ' ', self.edgemap
         for child in self.children:
             child.printnode(offset + 2)

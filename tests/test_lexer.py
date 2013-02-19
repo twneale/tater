@@ -9,7 +9,7 @@ from tater.core import RegexLexer
 
 class TestLexer(RegexLexer):
     """Test tuple state transitions including #pop."""
-    DEBUG = logging.DEBUG
+    # DEBUG = logging.DEBUG
     re_skip = re.compile('\s+')
     tokendefs = {
         'root': [

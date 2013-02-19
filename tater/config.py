@@ -1,5 +1,5 @@
 
-
+LOG_MSG_MAXWIDTH = 300
 
 LOGGING_CONFIG = {
     'version': 1,
