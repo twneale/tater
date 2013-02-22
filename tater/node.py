@@ -161,9 +161,12 @@ class Node(object):
         parent.append(self, related)
         return parent
 
-    def descend(self, cls, items=None, edge=None):
+    def descend(self, cls, items=None, edge=None, transfer=False):
         items = items or []
         child = cls(*items)
+        if transfer:
+            child.children.extend(self.children)
+            self.children = []
         return self.append(child, edge=edge)
 
     def remove(self, child):
