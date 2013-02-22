@@ -30,6 +30,7 @@ _divisions = u'''
     ch.
 '''.split()
 _divisions = _divisions + ['sub' + word for word in filter(None, _divisions)]
+_divisions = _divisions + [word + 's' for word in filter(None, _divisions)]
 _divisions = map(re.escape, _divisions)
 _divisions = sorted(_divisions, key=len, reverse=True)
 re_divisions = '(?i)\s*(%s)' % '|'.join(_divisions)
