@@ -174,13 +174,21 @@ class Node(object):
         self.children.remove(child)
 
     def swap(self, cls, items=None):
-        '''Swap cls(*items) for this node.
+        '''Swap cls(*items) for this node and make this node
+        it's child.
         '''
         items = items or []
         new_parent = self.parent.descend(cls, items)
         self.parent.remove(self)
         new_parent.append(self)
         return new_parent
+
+    def replace(self, cls, items=None):
+        'Replace this node wholesale with cls(*items)'
+        items = items or []
+        new_node = self.parent.descend(cls, items)
+        self.parent.remove(self)
+        return new_node
 
     def pop(self):
         '''Just for readability and clarity about what it means
