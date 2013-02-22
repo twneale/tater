@@ -123,6 +123,7 @@ class Node(object):
                 return func(self, *items)
 
         # Functions marked with 'matches_subtypes' decorator.
+        # NOTE: it'd be way better if it just failed over to this method.
         _, _token, _ = itemstream.this()
         for func, supertype in self._supertypes:
             if _token in supertype:
@@ -183,11 +184,13 @@ class Node(object):
         new_parent.append(self)
         return new_parent
 
-    def replace(self, cls, items=None):
+    def replace(self, cls, items=None, transfer=False):
         'Replace this node wholesale with cls(*items)'
         items = items or []
         new_node = self.parent.descend(cls, items)
         self.parent.remove(self)
+        if transfer:
+            new_node.children.extend(self.children)
         return new_node
 
     def pop(self):
