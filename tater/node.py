@@ -1,6 +1,7 @@
 import inspect
 
 from tater.core import ItemStream
+from tater.utils.context import OrderedContext
 
 
 class ConfigurationError(Exception):
@@ -62,29 +63,22 @@ class _NodeMeta(type):
 
         get_attr_dict = lambda cls: dict(inspect.getmembers(cls))
 
-        for attrs in map(get_attr_dict, bases) + [attrs]:
-            items = attrs.items()
+        context = OrderedContext()
+        for base in bases:
+            context = context.new_child()
+            context.update(get_attr_dict(base))
 
-            # Sort if an order is given.
-            order = attrs.get('order')
-            if order is not None:
-                def sorter(item, order=order):
-                    attr, val = item
-                    if attr in order:
-                        return order.index(attr)
-                    else:
-                        return -1
-                items.sort(sorter)
+        context = context.new_child(attrs)
 
-            for funcname, func in items:
-                tokens_or_items = getattr(func, 'tokens_or_items', [])
-                funcs.extend((func, data) for data in tokens_or_items)
+        for funcname, func in context.items():
+            tokens_or_items = getattr(func, 'tokens_or_items', [])
+            funcs.extend((func, data) for data in tokens_or_items)
 
-                _supertypes = getattr(func, '_tokens_supertypes', [])
-                supertypes.extend(
-                    (func, _supertype) for _supertype in _supertypes)
+            _supertypes = getattr(func, '_tokens_supertypes', [])
+            supertypes.extend(
+                (func, _supertype) for _supertype in _supertypes)
 
-        attrs.update(_funcs=funcs, _supertypes=supertypes)
+        context.update(_funcs=funcs, _supertypes=supertypes)
         cls = type.__new__(meta, name, bases, attrs)
         return cls
 
@@ -198,7 +192,7 @@ class Node(object):
         to return the parent.'''
         return self.parent
 
-    def extend(self, items):
+    def extend(self, *items):
         self.items.extend(items)
         return self
 
