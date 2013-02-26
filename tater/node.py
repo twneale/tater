@@ -69,8 +69,20 @@ class _NodeMeta(type):
             context.update(get_attr_dict(base))
 
         context = context.new_child(attrs)
+        items = context.items()
 
-        for funcname, func in context.items():
+        # Sort if an order is given.
+        order = context.map.get('order')
+        if order is not None:
+            def sorter(item, order=order):
+                attr, val = item
+                if attr in order:
+                    return order.index(attr)
+                else:
+                    return -1
+            items.sort(sorter, reverse=True)
+
+        for funcname, func in items:
             tokens_or_items = getattr(func, 'tokens_or_items', [])
             funcs.extend((func, data) for data in tokens_or_items)
 
@@ -78,7 +90,7 @@ class _NodeMeta(type):
             supertypes.extend(
                 (func, _supertype) for _supertype in _supertypes)
 
-        context.update(_funcs=funcs, _supertypes=supertypes)
+        attrs.update(_funcs=funcs, _supertypes=supertypes)
         cls = type.__new__(meta, name, bases, attrs)
         return cls
 
