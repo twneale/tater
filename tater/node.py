@@ -1,7 +1,8 @@
 import inspect
 
 from tater.core import ItemStream
-from tater.utils.context import OrderedContext
+from tater.utils import CachedAttr
+from tater.utils.context import Context
 
 
 class ConfigurationError(Exception):
@@ -63,16 +64,19 @@ class _NodeMeta(type):
 
         get_attr_dict = lambda cls: dict(inspect.getmembers(cls))
 
-        context = OrderedContext()
-        for base in bases:
-            context = context.new_child()
-            context.update(get_attr_dict(base))
+        # Include all marked handlers in base classes in this
+        # class's _funcs and _supertypes.
+        _attrs = {}
+        for base_attrs in map(get_attr_dict, bases):
+            _attrs.update(base_attrs)
 
-        context = context.new_child(attrs)
-        items = context.items()
+        # Now supercede the base attrs with this class def's attrs:
+        _attrs.update(attrs)
 
-        # Sort if an order is given.
-        order = context.map.get('order')
+        items = _attrs.items()
+
+        # Sort the items if an order is given.
+        order = _attrs.get('order')
         if order is not None:
             def sorter(item, order=order):
                 attr, val = item
@@ -80,7 +84,7 @@ class _NodeMeta(type):
                     return order.index(attr)
                 else:
                     return -1
-            items.sort(sorter, reverse=True)
+            items.sort(sorter)
 
         for funcname, func in items:
             tokens_or_items = getattr(func, 'tokens_or_items', [])
@@ -214,3 +218,17 @@ class Node(object):
             print offset * ' ', self.edgemap
         for child in self.children:
             child.printnode(offset + 2)
+
+    @CachedAttr
+    def context(self):
+        try:
+            return self._context
+        except AttributeError:
+            pass
+
+        if hasattr(self, 'parent'):
+            context = self.parent.context.new_child()
+        else:
+            context = Context()
+        self._context = context
+        return context

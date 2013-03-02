@@ -5,7 +5,7 @@ from collections import MutableMapping
 from itertools import chain, imap
 
 
-class BaseContext(MutableMapping):
+class Context(MutableMapping):
     ''' Nested contexts -- a chain of mapping objects.
 
     c = Context()           Create root context
@@ -103,73 +103,3 @@ class BaseContext(MutableMapping):
     def __repr__(self, repr=repr):
         return ' -> '.join(imap(repr, self.maps))
 
-
-if __name__ == '__main__':
-    c = Context()
-    c['a'] = 1
-    c['b'] = 2
-    d = c.new_child()
-    d['c'] = 3
-    print 'd:  ', d
-    assert repr(d) == "{'c': 3} -> {'a': 1, 'b': 2}"
-
-    e = d.new_child()
-    e['d'] = 4
-    e['b'] = 5
-    print 'e:  ', e
-    assert repr(e) == "{'b': 5, 'd': 4} -> {'c': 3} -> {'a': 1, 'b': 2}"
-
-    f = d.new_child(enable_nonlocal=True)
-    f['d'] = 4
-    f['b'] = 5
-    print 'f:  ', f
-    assert repr(f) == "{'d': 4} -> {'c': 3} -> {'a': 1, 'b': 5}"
-
-    print len(f)
-    assert len(f) == 4
-    assert len(list(f)) == 4
-    assert all(k in f for k in f)
-    assert f.root == c
-
-    # dynanmic scoping example
-    def f(ctx):
-        print ctx['a'], 'f:  reading "a" from the global context'
-        print 'f: setting "a" in the global context'
-        ctx['a'] *= 999
-        print 'f: reading "b" from globals and setting "c" in locals'
-        ctx['c'] = ctx['b'] * 50
-        print 'f: ', ctx
-        g(ctx.new_child())
-        print 'f: ', ctx
-
-
-    def g(ctx):
-        print 'g: setting "d" in the local context'
-        ctx['d'] = 44
-        print '''g: setting "c" in f's context'''
-        ctx['c'] = -1
-        print 'g: ', ctx
-    global_context = Context(enable_nonlocal=True)
-    global_context.update(a=10, b=20)
-    f(global_context.new_child())
-## end of http://code.activestate.com/recipes/577434/ }}}
-
-
-class OrderedContext(BaseContext):
-
-    def items(self):
-        '''Make items return a sorted list.
-        '''
-        items = BaseContext.items(self)
-
-        # Sort if an order is given.
-        order = self.map.get('order')
-        if order is not None:
-            def sorter(item, order=order):
-                attr, val = item
-                if attr in order:
-                    return order.index(attr)
-                else:
-                    return -1
-            items.sort(sorter, reverse=True)
-        return items
