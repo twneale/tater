@@ -28,6 +28,9 @@ _divisions = u'''
 
     chapter
     ch.
+
+    article
+    art.
 '''.split()
 _divisions = _divisions + ['sub' + word for word in filter(None, _divisions)]
 _divisions = _divisions + [word + 's' for word in filter(None, _divisions)]
