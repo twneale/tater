@@ -327,15 +327,20 @@ class ItemIterator(object):
         data = self.data
         iterator = self.iterator
 
-        if i < self.i:
+        if i and i < self.i:
             return data[i]
 
         while True:
-            if self.i <= i:
-                value = next(iterator)
-                data.append(value)
-                self.i += 1
+            if i:
+                if self.i <= i:
+                    value = next(iterator)
+                    data.append(value)
+                    self.i += 1
+                else:
+                    break
             else:
+                data.extend(list(iterator))
+                self.i = len(self.data)
                 break
 
         return data[int_or_slice]
@@ -354,6 +359,9 @@ class ItemStream(object):
             except IndexError:
                 raise StopIteration
             self.i += 1
+
+    def __repr__(self):
+        return repr(self._stream[self.i:][:5]) + '...'
 
     def next(self):
         i = self.i + 1

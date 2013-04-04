@@ -119,6 +119,12 @@ class Node(object):
     def edge_map(self):
         return getattr(self, '_edges', {})
 
+    def first_token(self):
+        return self.items[0][1]
+
+    def first_text(self):
+        return self.items[0][2]
+
     def resolve(self, itemstream):
         '''Try to resolve the incoming stream against the functions
         defined on the class instance.

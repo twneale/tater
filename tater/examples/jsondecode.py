@@ -21,8 +21,9 @@
 import re
 
 from tater.node import Node, matches, matches_subtypes
-from tater.core import RegexLexer, Rule, bygroups, parse, include
-from tater.tokentype import Token
+from tater.core import RegexLexer, bygroups, parse, include
+from tater.core import Rule as r
+from tater.tokentype import Token as t
 
 
 class Tokenizer(RegexLexer):
@@ -30,8 +31,6 @@ class Tokenizer(RegexLexer):
 
     re_skip = r'[,\s]+'
 
-    r = Rule
-    t = Token
     tokendefs = {
         'root': [
             r(t.OpenBrace, '{', 'object'),
@@ -45,10 +44,13 @@ class Tokenizer(RegexLexer):
             r(t.Literal.Null, 'null'),
             ],
 
+        'object_item': [
+            r(bygroups(t.KeyName), r'"([^\\]+?)"\s*:'),
+            ],
+
         'object': [
             r(t.OpenBrace, '{', 'object'),
             r(t.OpenBracket, r'\[', push='array'),
-            r(bygroups(t.KeyName), r'"([^\\]+?)"\s*:'),
             include('literals'),
             r(t.CloseBrace, '}', pop=True),
             ],

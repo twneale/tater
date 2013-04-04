@@ -6,7 +6,7 @@ LOGGING_CONFIG = {
     'disable_existing_loggers': False,
     'formatters': {
         'standard': {
-            'format': "%(asctime)s %(levelname)s %(name)s: %(message)s",
+            'form at': "%(asctime)s %(levelname)s %(name)s: %(message)s",
             'datefmt': '%H:%M:%S'
         }
     },
@@ -16,7 +16,7 @@ LOGGING_CONFIG = {
                     'formatter': 'standard'},
     },
     'loggers': {
-        'tater.Tokenizer': {
+        'tater.Lexer': {
             'handlers': ['default'], 'level': 'DEBUG', 'propagate': False
         },
     },
