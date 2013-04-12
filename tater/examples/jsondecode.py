@@ -27,6 +27,7 @@ from tater.tokentype import Token as t
 
 
 class Tokenizer(RegexLexer):
+    # import logging
     # DEBUG = logging.DEBUG
 
     re_skip = r'[,\s]+'
@@ -44,25 +45,35 @@ class Tokenizer(RegexLexer):
             r(t.Literal.Null, 'null'),
             ],
 
-        'object_item': [
+        'object.item': [
+            include('object.key'),
+            include('object.value'),
+            include('literals'),
+            ],
+
+        'object.key': [
             r(bygroups(t.KeyName), r'"([^\\]+?)"\s*:'),
+            ],
+
+        'object.value': [
+            include('literals'),
+            # include('object'),
+            include('array'),
             ],
 
         'object': [
             r(t.OpenBrace, '{', 'object'),
             r(t.OpenBracket, r'\[', push='array'),
-            include('literals'),
+            include('object.item'),
             r(t.CloseBrace, '}', pop=True),
             ],
 
         'array': [
+            # include('object'),
             include('literals'),
             r(t.CloseBracket, r'\]', pop=True),
             ],
         }
-
-
-t = Token
 
 
 class Root(Node):
