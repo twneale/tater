@@ -118,9 +118,13 @@ class RegexLexer(object):
     class MatchFound(Exception):
         pass
 
-    def __init__(self):
+    def __init__(self, text):
 
-        self._reset()
+        # Set initial state.
+        self.pos = 0
+        self.statestack = ['root']
+        self.defs = self.tokendefs['root']
+        self.text = None
 
         if hasattr(self, 're_skip'):
             self.re_skip = re.compile(self.re_skip).match
@@ -146,17 +150,9 @@ class RegexLexer(object):
         self.warn = debug_func(logger.warn)
         self.critical = debug_func(logger.critical)
 
-    def _reset(self):
-        self.pos = 0
-        self.statestack = ['root']
-        self.defs = self.tokendefs['root']
-        self.text = None
-
-    def tokenize(self, text):
-        self._reset()
-        self.info('Tokenizing text: %r' % text)
-        self.text = text
-        text_len = len(text)
+    def __iter__(self):
+        self.info('Tokenizing text: %r' % self.text)
+        text_len = len(self.text)
         while True:
             # If here, we hit the end of the input. Stop.
             if text_len <= self.pos:
