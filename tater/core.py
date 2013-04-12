@@ -24,8 +24,7 @@ Rule = collections.namedtuple('Rule', 'token rgxs push pop swap')
 class Rule(Rule):
     'Rule(token, rgxs, push, pop, swap)'
 
-    def __new__(_cls, token, rgxs,
-        push=None, pop=None, swap=None):
+    def __new__(_cls, token, rgxs, push=None, pop=None, swap=None):
         'Create new instance of Rule(token, rgxs, push, pop, swap)'
         return tuple.__new__(_cls, (token, rgxs, push, pop, swap))
 
@@ -55,10 +54,10 @@ class _TokendefCompiler(object):
         rubberstamp = lambda s: s
         re_compile = lambda s: re.compile(s, flags)
         getfunc = {
-                unicode: re_compile,
-                str: re_compile,
-                _re_type: rubberstamp
-                }
+            unicode: re_compile,
+            str: re_compile,
+            _re_type: rubberstamp
+            }
 
         append = self.compiled[state].append
         iter_rgxs = self._iter_rgxs
