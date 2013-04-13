@@ -1,10 +1,9 @@
 import re
-import logging
 import unittest
 
 from tater.tokentype import Token as t
 from tater.core import Rule as r
-from tater.core import RegexLexer
+from tater.lexer import RegexLexer
 
 
 class TestLexer(RegexLexer):
@@ -28,8 +27,7 @@ class TestLexer(RegexLexer):
 
 class TupleTransTest(unittest.TestCase):
     def test(self):
-        lx = TestLexer()
-        toks = list(lx.tokenize('abcde'))
+        toks = list(TestLexer('abcde'))
         self.assertEqual(toks,
            [(0, t.Root, 'a'), (1, t.Rag, 'b'), (2, t.Rag, 'c'),
             (3, t.Beer, 'd'), (4, t.Root, 'e')])
