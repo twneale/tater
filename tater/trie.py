@@ -8,7 +8,6 @@ _translate_chars = [
 
 
 def liberalizer(string):
-    print repr(string)
     subber = lambda m: ' ?{0}? ?'.format(m.group())
     string = re.sub("[.,:;'`\[\]()]", subber, string)
     string = re.sub('\s+', '\s{,3}', string)
