@@ -1,3 +1,4 @@
+from tater.core import ItemStream
 
 
 def parse(start, itemiter):
