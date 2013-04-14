@@ -92,19 +92,23 @@ class RegexLexer(object):
     class MatchFound(Exception):
         pass
 
-    def __init__(self, text):
+    def __init__(self, text, pos=0):
+        '''Text is the input string to lex. Pos is the
+        position at which to start, or 0.
+        '''
 
         # Set initial state.
+        self.text = text
         self.pos = 0
         self.statestack = ['root']
         self.defs = self.tokendefs['root']
-        self.text = text
 
         if hasattr(self, 're_skip'):
             self.re_skip = re.compile(self.re_skip).match
         else:
             self.re_skip = None
 
+        # Debug logging. Yuck.
         DEBUG = None
         if '-q' not in sys.argv[1:]:
             DEBUG = getattr(self, 'DEBUG', None)
@@ -128,8 +132,8 @@ class RegexLexer(object):
         self.info('Tokenizing text: %r' % self.text)
         text_len = len(self.text)
         while True:
-            # If here, we hit the end of the input. Stop.
             if text_len <= self.pos:
+                # If here, we hit the end of the input. Stop.
                 return
             try:
                 for item in self.scan():
