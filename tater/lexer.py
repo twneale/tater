@@ -99,7 +99,7 @@ class RegexLexer(object):
 
         # Set initial state.
         self.text = text
-        self.pos = 0
+        self.pos = pos
         self.statestack = ['root']
         self.defs = self.tokendefs['root']
 
