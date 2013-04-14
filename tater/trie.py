@@ -23,10 +23,14 @@ def trie2regex(trie):
             buf.append('(?:')
 
         for i, char in enumerate(keys):
+            if 0 in node:
+                buf.append('(')
             buf.append(char)
             v = node[char]
             if isinstance(v, dict):
                 _add_node(node[char], buf)
+            if 0 in node:
+                buf.append(')?')
             if i < (keys_len - 1):
                 buf.append('|')
 
