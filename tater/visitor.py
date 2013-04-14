@@ -13,7 +13,7 @@ class _MethodDict(dict):
         return method
 
 
-class VisitorBase(object):
+class Visitor(object):
 
     @CachedAttr
     def _methods(self):
