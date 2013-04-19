@@ -6,7 +6,11 @@ def parse(start, itemiter):
     '''
     itemstream = ItemStream(itemiter)
 
-    node = start()
+    if callable(start):
+        node = start()
+    else:
+        node = start
+
     while 1:
         try:
             node = node.resolve(itemstream)
