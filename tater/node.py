@@ -152,9 +152,9 @@ class Node(object):
         if parent is not None:
             return parent.resolve(itemstream)
         else:
-            msg = 'No function defined on %r for %s'
+            msg = 'No function defined on %r for %s ...'
             i = itemstream.i
-            stream = itemstream._stream[i:i + 5] + ['...']
+            stream = itemstream._stream[i:i + 5]
             raise ParseError(msg % (self, stream))
 
     def append(self, child, related=True, edge=None):
