@@ -14,7 +14,9 @@ class _MethodDict(dict):
 
 
 class Visitor(object):
-
+    '''Define a generic_visit function to do the same
+    thing on each node.
+    '''
     @CachedAttr
     def _methods(self):
         return _MethodDict(visitor=self)
@@ -31,12 +33,13 @@ class Visitor(object):
             visit_nodes(child)
 
     def visit_node(self, node):
-        func = self._methods.get(node, self.generic_visit)
+        func = self._methods[node]
         if func is not None:
             return func(node)
-
-    def generic_visit(self, node):
-        pass
+        else:
+            generic_visit = getattr(self, 'generic_visit', None)
+            if generic_visit is not None:
+                return generic_visit(node)
 
     def finalize(self):
         pass
