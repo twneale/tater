@@ -35,5 +35,8 @@ class Visitor(object):
         if func is not None:
             return func(node)
 
+    def generic_visit(self, node):
+        pass
+
     def finalize(self):
         pass
