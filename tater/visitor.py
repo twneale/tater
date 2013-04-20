@@ -26,7 +26,7 @@ class Visitor(object):
 
     def visit_nodes(self, node):
         self.visit_node(node)
-        visit_nodes = self._visit_nodes
+        visit_nodes = self.visit_nodes
         for child in node.children:
             visit_nodes(child)
 
