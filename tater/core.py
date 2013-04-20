@@ -48,6 +48,7 @@ class ItemIterator(object):
         data = self.data
         iterator = self.iterator
 
+        # THIS IS FUCKED. Slice get's retured as if it's an int.
         if i and i < self.i:
             return data[i]
 
