@@ -21,16 +21,16 @@ class Visitor(object):
 
     def visit(self, node):
         self.node = node
-        self._visit_nodes(node)
+        self.visit_nodes(node)
         self.finalize()
 
-    def _visit_nodes(self, node):
-        self._visit_node(node)
+    def visit_nodes(self, node):
+        self.visit_node(node)
         visit_nodes = self._visit_nodes
         for child in node.children:
             visit_nodes(child)
 
-    def _visit_node(self, node):
+    def visit_node(self, node):
         func = self._methods[node]
         if func is not None:
             return func(node)
