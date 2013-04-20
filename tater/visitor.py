@@ -31,7 +31,7 @@ class Visitor(object):
             visit_nodes(child)
 
     def visit_node(self, node):
-        func = self._methods[node]
+        func = self._methods.get(node, self.generic_visit)
         if func is not None:
             return func(node)
 
