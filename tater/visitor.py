@@ -43,3 +43,22 @@ class Visitor(object):
 
     def finalize(self):
         pass
+
+
+class Transformer(Visitor):
+    '''A visitor that replaces the visited node with the
+    output of the visitor function.
+    '''
+    def visit_nodes(self, node):
+        '''If the visitor function returns a new node, replace
+        the current node with it, then stop.
+
+        Otherwise, continue on down the tree.
+        '''
+        new_node = self.visit_node(node)
+        if new_node is not None:
+            node.replace(new_node)
+            return
+        visit_nodes = self.visit_nodes
+        for child in node.children:
+            visit_nodes(child)

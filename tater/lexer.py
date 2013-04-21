@@ -113,6 +113,9 @@ class RegexLexer(object):
         if '-q' not in sys.argv[1:]:
             DEBUG = getattr(self, 'DEBUG', None)
 
+        if '-v' in sys.argv[1:]:
+            DEBUG = logging.DEBUG
+
         def debug_func(func, debug=DEBUG is not None,
                        log_msg_maxwidth=LOG_MSG_MAXWIDTH):
             @functools.wraps(func)

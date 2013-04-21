@@ -154,7 +154,7 @@ class Node(object):
         else:
             msg = 'No function defined on %r for %s ...'
             i = itemstream.i
-            stream = itemstream._stream
+            stream = list(itemstream._stream)[i:i+10]
             raise ParseError(msg % (self, stream))
 
     def append(self, child, related=True, edge=None):
@@ -169,6 +169,12 @@ class Node(object):
                 self.edge_map[edge] = child
         return child
 
+    def insert(self, index, child):
+        '''Insert a child node a specific index.
+        '''
+        self.children.insert(index, child)
+        return child
+
     def ascend(self, cls, items=None, related=True):
         '''Create a new parent node. Set it as the
         parent of this node. Return the parent.
@@ -180,6 +186,11 @@ class Node(object):
 
     def descend(self, cls, items=None, edge=None, transfer=False):
         items = items or []
+
+        # Put single item into a list. This sucks.
+        if items and isinstance(items[0], int):
+            items = [items]
+
         child = cls(*items)
         if transfer:
             child.children.extend(self.children)
@@ -200,14 +211,30 @@ class Node(object):
         new_parent.append(self)
         return new_parent
 
-    def replace(self, cls, items=None, transfer=False):
-        'Replace this node wholesale with cls(*items)'
+    def replace(self, cls_or_node, items=None, transfer=False):
+        '''Replace this node wholesale with the specified child.
+        Preserve order.
+        '''
         items = items or []
-        new_node = self.parent.descend(cls, items)
-        self.parent.remove(self)
+        parent = self.parent
+        children = parent.children
+        index = children.index(self)
+
+        # Remove this node.
+        children.remove(self)
+
+        if isinstance(cls_or_node, Node):
+            # If a node was passed in, insert it.
+            new_node = cls_or_node
+        else:
+            # Otherwise create a new node.
+            cls = cls_or_node
+            new_node = cls(*items)
+
         if transfer:
             new_node.children.extend(self.children)
-        return new_node
+
+        return parent.insert(index, new_node)
 
     def pop(self):
         '''Just for readability and clarity about what it means
@@ -218,12 +245,17 @@ class Node(object):
         self.items.extend(items)
         return self
 
-    def printnode(self, offset=0):
+    def pprint(self, offset=0):
         print offset * ' ', '-', self
-        if self.edge_map:
-            print offset * ' ', self.edgemap
         for child in self.children:
-            child.printnode(offset + 2)
+            child.pprint(offset + 2)
+
+    def pformat(self, offset=0, buf=None):
+        buf = buf or []
+        buf.extend([offset * ' ', '-', repr(self), '\n'])
+        for child in self.children:
+            child.pformat(offset + 2, buf)
+        return ''.join(buf)
 
     @CachedAttr
     def context(self):
