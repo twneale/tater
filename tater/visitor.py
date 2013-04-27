@@ -25,6 +25,7 @@ class Visitor(object):
         self.node = node
         self.visit_nodes(node)
         self.finalize()
+        return self
 
     def visit_nodes(self, node):
         self.visit_node(node)
