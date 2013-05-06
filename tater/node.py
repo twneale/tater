@@ -3,6 +3,7 @@ import inspect
 from tater.core import ItemStream
 from tater.utils import CachedAttr
 from tater.utils.context import Context
+from tater.visitor import Visitor
 
 
 class ConfigurationError(Exception):
@@ -172,6 +173,7 @@ class Node(object):
     def insert(self, index, child):
         '''Insert a child node a specific index.
         '''
+        child.parent = self
         self.children.insert(index, child)
         return child
 
@@ -270,3 +272,20 @@ class Node(object):
             context = Context()
         self._context = context
         return context
+
+    def _depth_first(self):
+        yield self
+        for child in self.children:
+            for node in child._depth_first():
+                yield node
+
+    def find(self, type_):
+        for node in self._depth_first():
+            if isinstance(node, type_):
+                yield node
+
+    def find_one(self, type_):
+        '''Find the only child matching the criteria.
+        '''
+        for node in self.find(type_):
+            return node
