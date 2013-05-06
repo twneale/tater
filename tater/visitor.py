@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 from tater.utils import CachedAttr
 
 
@@ -24,8 +26,7 @@ class Visitor(object):
     def visit(self, node):
         self.node = node
         self.visit_nodes(node)
-        self.finalize()
-        return self
+        return self.finalize()
 
     def visit_nodes(self, node):
         self.visit_node(node)
@@ -43,7 +44,10 @@ class Visitor(object):
                 return generic_visit(node)
 
     def finalize(self):
-        pass
+        '''Final steps the visitor needs to take, plus the
+        return value or .visit, if any.
+        '''
+        return self
 
 
 class Transformer(Visitor):
@@ -63,3 +67,95 @@ class Transformer(Visitor):
         visit_nodes = self.visit_nodes
         for child in node.children:
             visit_nodes(child)
+
+
+class Renderer(Visitor):
+    '''The visitor functions on this visitor are context manages.
+    They perform some action initially, then delegate to the node's
+    child functions all the way down the tree, then perform a final,
+    closing action, like closing at html tag.
+
+    from contextlib import contextmanager
+    from StringIO import StringIO
+
+    form tater.visitor import Renderer
+
+
+    class MyRenderer(Render):
+
+        def __init__(self):
+            self.buf = StringIO()
+
+        @contextmanager
+        def visit_div(self, node):
+            self.buf.write('<div>')
+            self.buf.write(node.first_text())
+            yield
+            self.buf.write('</div>')
+    '''
+    def visit_nodes(self, node):
+        '''If the visitor function is a context manager, invoke it,
+        otherwise just run the function.
+        '''
+        func = self._methods[node]
+
+        # If no function is defined, run the generic visit function.
+        if func is None:
+            generic_visit = getattr(self, 'generic_visit', None)
+            if generic_visit is None:
+                return
+            return generic_visit(node)
+
+        # Test if the function is a context manager. If so, invoke it.
+        else:
+            with func(node):
+                visit_nodes = self.visit_nodes
+                for child in node.children:
+                    visit_nodes(child)
+
+
+class _Orderer(Visitor):
+
+    def __init__(self):
+        self.nodes = []
+
+    def visit_node(self, node):
+        self.nodes.append(node)
+
+    def _sortfunc(self, node):
+        if node.items:
+            for pos, token, text in node.items:
+                return pos
+
+    def finalize(self):
+        return sorted(self.nodes, key=self._sortfunc)
+
+
+class OrderedRenderer(Visitor):
+    '''In sort nodes, method, chooses the order in which
+    to visit children based on their index vals. Probz doesn't
+    need a helper class to do that. ACTUALLY YES IT DOES.
+    '''
+    def visit(self, node):
+        self.ordered = _Orderer().visit(node)
+        super(OrderedRenderer, self).visit(node)
+
+    def visit_nodes(self, node):
+        '''If the visitor function is a context manager, invoke it,
+        otherwise just run the function.
+        '''
+        func = self._methods[node]
+
+        # If no function is defined, run the generic visit function.
+        if func is None:
+            generic_visit = getattr(self, 'generic_visit', None)
+            if generic_visit is None:
+                return
+            return generic_visit(node)
+
+        # Test if the function is a context manager. If so, invoke it.
+        else:
+            with func(node):
+                visit_nodes = self.visit_nodes
+                for child in node.children:  # sorted(node.children, key=self.ordered.index):
+                    visit_nodes(child)
