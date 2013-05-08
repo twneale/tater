@@ -1,5 +1,9 @@
-from contextlib import contextmanager
-
+'''
+Note: it's critical to visit a copy of node.children,
+otherwise children might be mutated by the visitor
+functions, causing the visitor to skip children
+and not visit them.
+'''
 from tater.utils import CachedAttr
 
 
@@ -31,7 +35,7 @@ class Visitor(object):
     def visit_nodes(self, node):
         self.visit_node(node)
         visit_nodes = self.visit_nodes
-        for child in node.children:
+        for child in node.children[:]:
             visit_nodes(child)
 
     def visit_node(self, node):
@@ -65,7 +69,7 @@ class Transformer(Visitor):
             node.replace(new_node)
             return
         visit_nodes = self.visit_nodes
-        for child in node.children:
+        for child in node.children[:]:
             visit_nodes(child)
 
 
@@ -110,7 +114,7 @@ class Renderer(Visitor):
         else:
             with func(node):
                 visit_nodes = self.visit_nodes
-                for child in node.children:
+                for child in node.children[:]:
                     visit_nodes(child)
 
 
@@ -157,5 +161,5 @@ class OrderedRenderer(Visitor):
         else:
             with func(node):
                 visit_nodes = self.visit_nodes
-                for child in node.children:  # sorted(node.children, key=self.ordered.index):
+                for child in node.children[:]:  # sorted(node.children, key=self.ordered.index):
                     visit_nodes(child)
