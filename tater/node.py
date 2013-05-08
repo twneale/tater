@@ -3,7 +3,7 @@ import inspect
 from tater.core import ItemStream
 from tater.utils import CachedAttr
 from tater.utils.context import Context
-from tater.visitor import Visitor
+from tater.tokentype import Token
 
 
 class ConfigurationError(Exception):
@@ -177,6 +177,14 @@ class Node(object):
         self.children.insert(index, child)
         return child
 
+    def index(self):
+        '''Return the index of this node in its parent's children
+        list.
+        '''
+        parent = self.parent
+        if parent is not None:
+            return parent.children.index(self)
+
     def ascend(self, cls, items=None, related=True):
         '''Create a new parent node. Set it as the
         parent of this node. Return the parent.
@@ -185,6 +193,12 @@ class Node(object):
         parent = cls(*items)
         parent.append(self, related)
         return parent
+
+    def detatch(self):
+        '''Remove this node from parent.
+        '''
+        self.parent.remove(self)
+        return self
 
     def descend(self, cls, items=None, edge=None, transfer=False):
         items = items or []
@@ -279,6 +293,33 @@ class Node(object):
             for node in child._depth_first():
                 yield node
 
+    # Querying methods.
+    def has_siblings(self):
+        parent = getattr(self, 'parent', None)
+        if parent is None:
+            return
+        return len(parent.children) > 1
+
+    def following_siblings(self):
+        parent = getattr(self, 'parent', None)
+        if parent is None:
+            return
+        return iter(parent.children[self.index()])
+
+    def preceding_siblings(self):
+        '''Iterate over preceding siblings from nearest to farthest.
+        '''
+        parent = getattr(self, 'parent', None)
+        if parent is None:
+            return
+        return reversed(parent.children[:self.index()])
+
+    def preceding_sibling(self):
+        try:
+            return next(self.preceding_siblings())
+        except StopIteration:
+            return
+
     def find(self, type_):
         for node in self._depth_first():
             if isinstance(node, type_):
@@ -289,3 +330,46 @@ class Node(object):
         '''
         for node in self.find(type_):
             return node
+
+    # Serialization methods.
+    def as_data(self):
+        items = []
+        for (pos, token, text) in self.items:
+            items.append((pos, token.as_json(), text))
+        return dict(
+            type=self.__class__.__name__,
+            items=items,
+            children=[child.as_data() for child in self.children]
+            )
+
+    @classmethod
+    def fromdata(cls, data, namespace):
+        '''
+        namespace: is a dict containing all the required
+        ast nodes to reconstitute this object.
+
+        json_data: is the nested dict structure.
+        '''
+        node_cls = namespace[data['type']]
+        items = []
+        for pos, token, text in data['items']:
+            items.append((pos, Token.fromstring(token), text))
+        node = node_cls(*items)
+        children = []
+        for child in data['children']:
+            children.append(cls.fromdata(child, namespace))
+        node.children = children
+        return node
+
+    def __eq__(self, other):
+        if self.__class__ is not other.__class__:
+            return False
+
+        # Don't care if the items are a list or tuple.
+        if tuple(self.items) != tuple(other.items):
+            return False
+
+        if self.children != other.children:
+            return False
+
+        return True
