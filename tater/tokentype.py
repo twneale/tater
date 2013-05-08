@@ -30,6 +30,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """
 
+
 class _TokenType(tuple):
     parent = None
 
@@ -64,6 +65,14 @@ class _TokenType(tuple):
     def __repr__(self):
         return 'Token' + (self and '.' or '') + '.'.join(self)
 
+    def as_json(self):
+        return '.'.join(self)
+
+    @classmethod
+    def fromstring(self, s):
+        return string_to_tokentype(s)
+
+
 Token = _TokenType()
 
 
@@ -74,3 +83,29 @@ def is_token_subtype(ttype, other):
     exists for backwards compatibility. use ``ttype in other`` now.
     """
     return ttype in other
+
+
+def string_to_tokentype(s):
+    """
+    Convert a string into a token type::
+
+        >>> string_to_token('String.Double')
+        Token.Literal.String.Double
+        >>> string_to_token('Token.Literal.Number')
+        Token.Literal.Number
+        >>> string_to_token('')
+        Token
+
+    Tokens that are already tokens are returned unchanged:
+
+        >>> string_to_token(String)
+        Token.Literal.String
+    """
+    if isinstance(s, _TokenType):
+        return s
+    if not s:
+        return Token
+    node = Token
+    for item in s.split('.'):
+        node = getattr(node, item)
+    return node
