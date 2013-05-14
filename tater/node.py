@@ -1,3 +1,4 @@
+import uuid
 import inspect
 
 from tater.core import ItemStream
@@ -124,7 +125,11 @@ class Node(object):
         return self.items[0][1]
 
     def first_text(self):
-        return self.items[0][2]
+        if self.items:
+            return self.items[0][2]
+        else:
+            # XXX: such crap
+            return ''
 
     def resolve(self, itemstream):
         '''Try to resolve the incoming stream against the functions
@@ -166,6 +171,8 @@ class Node(object):
         if related:
             child.parent = self
             self.children.append(child)
+            # Make child ctx lookups fail over to parent.
+            self.ctx.adopt(child.ctx)
             if edge is not None:
                 self.edge_map[edge] = child
         return child
@@ -174,6 +181,7 @@ class Node(object):
         '''Insert a child node a specific index.
         '''
         child.parent = self
+        self.ctx.adopt(child.ctx)
         self.children.insert(index, child)
         return child
 
@@ -246,6 +254,8 @@ class Node(object):
             # Otherwise create a new node.
             cls = cls_or_node
             new_node = cls(*items)
+            new_node.ctx = self.ctx
+            new_node.local_ctx = self.local_ctx
 
         if transfer:
             new_node.children.extend(self.children)
@@ -274,18 +284,36 @@ class Node(object):
         return ''.join(buf)
 
     @CachedAttr
-    def context(self):
+    def ctx(self):
+        '''For values that are accessible to children
+        and inherit from parents.
+        '''
         try:
-            return self._context
+            return self._ctx
         except AttributeError:
             pass
 
         if hasattr(self, 'parent'):
-            context = self.parent.context.new_child()
+            ctx = self.parent.ctx.new_child()
         else:
-            context = Context()
-        self._context = context
-        return context
+            ctx = Context()
+        self._ctx = ctx
+        return ctx
+
+    @CachedAttr
+    def local_ctx(self):
+        '''For values that won't be accessible to
+        chidlren and don't inhreit from parents.
+        '''
+        _local_ctx = {}
+        self._local_ctx = _local_ctx
+        return _local_ctx
+
+    @CachedAttr
+    def uuid(self):
+        _id = str(uuid.uuid4())
+        self.local_ctx['uuid'] = _id
+        return _id
 
     def _depth_first(self):
         yield self
@@ -339,8 +367,9 @@ class Node(object):
         return dict(
             type=self.__class__.__name__,
             items=items,
-            children=[child.as_data() for child in self.children]
-            )
+            children=[child.as_data() for child in self.children],
+            ctx=self.ctx.map,
+            local_ctx=self.local_ctx)
 
     @classmethod
     def fromdata(cls, data, namespace):
@@ -359,6 +388,10 @@ class Node(object):
         for child in data['children']:
             children.append(cls.fromdata(child, namespace))
         node.children = children
+        if 'ctx' in data:
+            node.ctx.update(data['ctx'])
+        if 'local_ctx' in data:
+            node._local_ctx = data['local_ctx']
         return node
 
     def __eq__(self, other):
@@ -370,6 +403,9 @@ class Node(object):
             return False
 
         if self.children != other.children:
+            return False
+
+        if self.ctx != other.ctx:
             return False
 
         return True
