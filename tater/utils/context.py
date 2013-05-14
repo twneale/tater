@@ -103,3 +103,10 @@ class Context(MutableMapping):
     def __repr__(self, repr=repr):
         return ' -> '.join(imap(repr, self.maps))
 
+    def adopt(self, child_ctx):
+        '''Adopt an contex as a child, enalbing its
+        lookups to fail over to this one's.
+        '''
+        child_ctx.parent = self
+        child_ctx.maps += self.maps
+        return child_ctx
