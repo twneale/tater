@@ -23,6 +23,11 @@ class Visitor(object):
     '''Define a generic_visit function to do the same
     thing on each node.
     '''
+    class Continue(Exception):
+        '''If a user-defined visitor function raises this exception,
+        children of the visited node won't be visited.
+        '''
+
     @CachedAttr
     def _methods(self):
         return _MethodDict(visitor=self)
@@ -33,7 +38,11 @@ class Visitor(object):
         return self.finalize()
 
     def visit_nodes(self, node):
-        self.visit_node(node)
+        try:
+            self.visit_node(node)
+        except self.Continue:
+            # Skip visiting the child nodes.
+            return
         visit_nodes = self.visit_nodes
         for child in node.children[:]:
             visit_nodes(child)
@@ -64,7 +73,11 @@ class Transformer(Visitor):
 
         Otherwise, continue on down the tree.
         '''
-        new_node = self.visit_node(node)
+        try:
+            new_node = self.visit_node(node)
+        except self.Continue:
+            # Skip visiting the child nodes.
+            return
         if new_node is not None:
             node.replace(new_node)
             return
@@ -112,10 +125,13 @@ class Renderer(Visitor):
 
         # Test if the function is a context manager. If so, invoke it.
         else:
-            with func(node):
-                visit_nodes = self.visit_nodes
-                for child in node.children[:]:
-                    visit_nodes(child)
+            try:
+                with func(node):
+                    visit_nodes = self.visit_nodes
+                    for child in node.children[:]:
+                        visit_nodes(child)
+            except self.Continue:
+                    pass
 
 
 class _Orderer(Visitor):
