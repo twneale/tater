@@ -79,7 +79,8 @@ class Transformer(Visitor):
             # Skip visiting the child nodes.
             return
         if new_node is not None:
-            node.replace(new_node)
+            if node in node.parent.children:
+                node.replace(new_node)
             return
         visit_nodes = self.visit_nodes
         for child in node.children[:]:
