@@ -69,6 +69,9 @@ class ItemIterator(object):
 
 
 class ItemStream(object):
+    '''This is decent wrapper that makes an iterable act more like
+    a list.
+    '''
 
     def __init__(self, iterable):
         self._stream = ItemIterator(iter(iterable))
@@ -118,6 +121,8 @@ class ItemStream(object):
         '''Take items from the stream matching the supplied
         sequence of tokens or (token, text) 2-tuples.
         The imagined idiom here is pattern matching.
+
+        This should be separated into a mixin.
         '''
         # Return container for matched items.
         matched_items = []

@@ -101,8 +101,7 @@ class _NodeMeta(type):
         return cls
 
 
-class Node(object):
-    __metaclass__ = _NodeMeta
+class NodeMixin(object):
 
     def __init__(self, *items):
         self.items = list(items)
@@ -300,17 +299,23 @@ class Node(object):
         self._ctx = ctx
         return ctx
 
-    @CachedAttr
+    @property
     def local_ctx(self):
         '''For values that won't be accessible to
         chidlren and don't inhreit from parents.
         '''
+        try:
+            return self._local_ctx
+        except AttributeError:
+            pass
         _local_ctx = {}
         self._local_ctx = _local_ctx
         return _local_ctx
 
-    @CachedAttr
+    @property
     def uuid(self):
+        if 'uuid' in self.local_ctx:
+            return self.local_ctx['uuid']
         _id = str(uuid.uuid4())
         self.local_ctx['uuid'] = _id
         return _id
@@ -348,10 +353,26 @@ class Node(object):
         except StopIteration:
             return
 
-    def find(self, type_):
-        for node in self._depth_first():
-            if isinstance(node, type_):
-                yield node
+    def ancestors(self):
+        this = self
+        while True:
+            try:
+                parent = this.parent
+            except AttributeError:
+                return
+            else:
+                yield parent
+            this = parent
+
+    def find(self, type_or_name):
+        if isinstance(type_or_name, basestring):
+            for node in self._depth_first():
+                if node.__class__.__name__ == type_or_name:
+                    yield node
+        else:
+            for node in self._depth_first():
+                if isinstance(node, type_or_name):
+                    yield node
 
     def find_one(self, type_):
         '''Find the only child matching the criteria.
@@ -372,13 +393,21 @@ class Node(object):
             local_ctx=self.local_ctx)
 
     @classmethod
-    def fromdata(cls, data, namespace):
+    def fromdata(cls, data, namespace=None):
         '''
         namespace: is a dict containing all the required
         ast nodes to reconstitute this object.
 
         json_data: is the nested dict structure.
         '''
+        if namespace is None:
+            class NameSpace(dict):
+                def __missing__(self, cls_name):
+                    cls = type(str(cls_name), (Node,), {})
+                    self[cls_name] = cls
+                    return cls
+            namespace = NameSpace()
+
         node_cls = namespace[data['type']]
         items = []
         for pos, token, text in data['items']:
@@ -386,7 +415,9 @@ class Node(object):
         node = node_cls(*items)
         children = []
         for child in data['children']:
-            children.append(cls.fromdata(child, namespace))
+            child = cls.fromdata(child, namespace)
+            child.parent = node
+            children.append(child)
         node.children = children
         if 'ctx' in data:
             node.ctx.update(data['ctx'])
@@ -409,3 +440,7 @@ class Node(object):
             return False
 
         return True
+
+
+class Node(NodeMixin):
+    __metaclass__ = _NodeMeta
