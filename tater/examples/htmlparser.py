@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 
-from tater.node import Node, matches
-from tater.core import RegexLexer, Rule, parse
-from tater.tokentype import Token
+from tater import Node, matches, RegexLexer, Rule, parse, Token
 
 
 class Tokenizer(RegexLexer):
@@ -38,19 +36,11 @@ class Tokenizer(RegexLexer):
 t = Token
 
 
-class Root(Node):
-    @matches(t.OpenAngle, t.Tagname)
-    def start_element(self, *items):
-        # Skip the angle bracket.
-        items = items[1:]
-        return self.descend(Element, items)
-
-
-class Text(Root):
+class Text(Node):
     pass
 
 
-class Element(Root):
+class Element(Node):
 
     @property
     def tagname(self):
@@ -71,18 +61,19 @@ class Element(Root):
         assert tagname == self.tagname
         return self.parent
 
+    @matches(t.OpenAngle, t.Tagname, t.CloseAngle)
+    def start_element(self, *items):
+        items = items[1:-1]
+        return self.descend(Element, items)
+
 
 def main():
-
     import pprint
-    ff = Tokenizer()
     s = ("<html><head><title>test</title></head><body><h1>page title</h1></body></html>")
-    print s
-    items = list(ff.tokenize(s))
+    items = list(Tokenizer(s))
     pprint.pprint(items)
-    x = parse(Root, items)
-    x.printnode()
-    import ipdb;ipdb.set_trace()
+    x = parse(Element, items)
+    x.pprint()
 
 if __name__ == '__main__':
     main()
