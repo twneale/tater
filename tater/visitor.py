@@ -11,9 +11,10 @@ class _MethodDict(dict):
     'Dict for caching visitor methods.'
     def __init__(self, visitor):
         self.visitor = visitor
+        self.get_nodekey = visitor.get_nodekey
 
     def __missing__(self, node):
-        name = node.__class__.__name__
+        name = self.get_nodekey(node)
         method = getattr(self.visitor, 'visit_' + name, None)
         self[name] = method
         return method
@@ -44,7 +45,7 @@ class Visitor(object):
             # Skip visiting the child nodes.
             return
         visit_nodes = self.visit_nodes
-        for child in node.children[:]:
+        for child in self.get_children(node):
             visit_nodes(child)
 
     def visit_node(self, node):
@@ -55,6 +56,12 @@ class Visitor(object):
             generic_visit = getattr(self, 'generic_visit', None)
             if generic_visit is not None:
                 return generic_visit(node)
+
+    def get_nodekey(self, node):
+        return node.__class__.__name__
+
+    def get_children(self, node):
+        return node.get_children[:]
 
     def finalize(self):
         '''Final steps the visitor needs to take, plus the
@@ -115,24 +122,29 @@ class Renderer(Visitor):
         '''If the visitor function is a context manager, invoke it,
         otherwise just run the function.
         '''
-        func = self._methods[node]
+        method = self._methods[node]
 
         # If no function is defined, run the generic visit function.
-        if func is None:
+        if method is None:
             generic_visit = getattr(self, 'generic_visit', None)
             if generic_visit is None:
                 return
-            return generic_visit(node)
+            method = generic_visit
 
+        self._run_visitor_method(method, node)
+
+    def _run_visitor_method(self, method, node):
         # Test if the function is a context manager. If so, invoke it.
-        else:
-            try:
-                with func(node):
-                    visit_nodes = self.visit_nodes
-                    for child in node.children[:]:
+        try:
+            with method(node):
+                visit_nodes = self.visit_nodes
+                for child in self.get_children(node):
+                    try:
                         visit_nodes(child)
-            except self.Continue:
-                    pass
+                    except self.Continue:
+                        continue
+        except:
+            return method(node)
 
 
 class _Orderer(Visitor):
@@ -180,3 +192,38 @@ class OrderedRenderer(Visitor):
                 visit_nodes = self.visit_nodes
                 for child in node.children[:]:  # sorted(node.children, key=self.ordered.index):
                     visit_nodes(child)
+
+
+class IteratorVisitor(Visitor):
+
+    def itervisit(self, node):
+        self.node = node
+        for result in self.itervisit_nodes(node):
+            if result is not None:
+                yield result
+
+    def itervisit_nodes(self, node):
+        try:
+            yield self.itervisit_node(node)
+        except self.Continue:
+            # Skip visiting the child nodes.
+            return
+        visit_nodes = self.itervisit_nodes
+        for child in self.get_children(node):
+            for result in visit_nodes(child):
+                yield result
+
+    def itervisit_node(self, node):
+        func = self._methods[node]
+        if func is not None:
+            return func(node)
+        else:
+            generic_visit = getattr(self, 'generic_visit', None)
+            if generic_visit is not None:
+                return generic_visit(node)
+
+    def get_children(self, node):
+        '''Override this to determine how child nodes are accessed.
+        '''
+        return node.children[:]
+

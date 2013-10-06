@@ -92,7 +92,7 @@ class RegexLexer(object):
     class MatchFound(Exception):
         pass
 
-    def __init__(self, text, pos=0):
+    def __init__(self, text, pos=0, statestack=None):
         '''Text is the input string to lex. Pos is the
         position at which to start, or 0.
         '''
@@ -100,7 +100,7 @@ class RegexLexer(object):
         # Set initial state.
         self.text = text
         self.pos = pos
-        self.statestack = ['root']
+        self.statestack = statestack or ['root']
         self.defs = self.tokendefs['root']
 
         if hasattr(self, 're_skip'):
@@ -217,7 +217,6 @@ class RegexLexer(object):
         for rgx in rgxs:
             self.debug('  _process_rule: statestack: %r' % self.statestack)
             if pos_changed:
-                self.info('  _process_rule: text: %r' % self.text)
                 self.info('  _process_rule:        ' + (' ' * self.pos) + '^')
                 pos_changed = False
 
