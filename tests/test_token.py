@@ -30,7 +30,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 import unittest
 
+<<<<<<< HEAD
 from tater.tokentype import _TokenType, Token as t, is_token_subtype
+=======
+from tater.core.tokentype import _TokenType, Token as t, is_token_subtype
+>>>>>>> org
 
 
 class TokenTest(unittest.TestCase):

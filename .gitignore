@@ -32,5 +32,4 @@ nosetests.xml
 *.sublime-project
 *.sublime-workspace
 
-us*
-tests/us*
+.python_history
