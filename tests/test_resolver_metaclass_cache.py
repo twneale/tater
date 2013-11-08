@@ -1,7 +1,7 @@
 from unittest import TestCase
 from nose.tools import assert_equals, assert_raises
 
-from tater import Node, parse
+from tater import Node
 from tater.base.node.exceptions import AmbiguousNodeNameError
 
 

@@ -17,6 +17,26 @@ class CachedAttr(object):
         return result
 
 
+class CachedClassAttribute(object):
+    '''Computes attribute value and caches it in class.
+
+    Example:
+        class MyClass(object):
+            def myMethod(cls):
+                # ...
+            myMethod = CachedClassAttribute(myMethod)
+    Use "del MyClass.myMethod" to clear cache.'''
+
+    def __init__(self, method, name=None):
+        self.method = method
+        self.name = name or method.__name__
+
+    def __get__(self, inst, cls):
+        result = self.method(cls)
+        setattr(cls, self.name, result)
+        return result
+
+
 class SetDefault(object):
     '''Context manager like getattr, but yields a default value,
     and sets on the instance on exit:
@@ -69,6 +89,8 @@ class NoClobberDict(dict):
 
 
 def memoize_methodcalls(func, dumps=cPickle.dumps):
+    '''Cache the results of the function for each input it gets called with.
+    '''
     cache = func._memoize_cache = {}
     @functools.wraps(func)
     def memoizer(self, *args, **kwargs):

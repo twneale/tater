@@ -2,24 +2,23 @@ import logging
 
 from tater.core.tokentype import Token
 from tater.utils.itemstream import ItemStream
+from tater.base.node import BaseNode
 
 
-def parse(start, itemiter, DEBUG=None):
-    '''Supply a user-defined start class.
+
+class Parser(object):
+    '''Chains lexer, Node, and arbitrary visitors together.
     '''
-    itemstream = ItemStream(itemiter)
+    def __init__(self, *classes, **options):
+        self.classes = classes
+        self.options = options
 
-    if callable(start):
-        node = start()
-    else:
-        node = start
-
-    while 1:
-        try:
-            if DEBUG == logging.DEBUG:
-                print '%r <-- %r' % (node, itemstream)
-                node.getroot().pprint()
-            node = node.resolve(itemstream)
-        except StopIteration:
-            break
-    return node.getroot()
+    def __call__(self, input_, **options):
+        _options = self.options
+        _options.update(options)
+        for cls in self.classes:
+            if issubclass(cls, BaseNode):
+                input_ = cls.parse(input_, **options)
+            else:
+                input_ = cls(input_, **options)
+        return input_

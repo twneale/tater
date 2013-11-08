@@ -20,23 +20,19 @@ class ItemStream(object):
     def __repr__(self):
         items = tuple(self._stream[self.i: (self.i + 5)])
         view = repr(items)
-        if 5 <= len(tuple):
-            view + '...'
-        return view
+        if 5 <= len(self._stream):
+            view += ' ...'
+        cls_name = self.__class__.__name__
+        return '%s(%s)' % (cls_name, view)
 
     def __len__(self):
-        return len(self._stream)
+        return len(self._stream._data)
 
     def __nonzero__(self):
         '''Return false if the stream is exhausted or if this iterator's
         index is equal to the length of the stream.
         '''
-        if not self._stream._exhausted:
-            if len(self) == self.i:
-                return False
-            return True
-        else:
-            return False
+        return not self._stream._exhausted
 
     def next(self):
         i = self.i
@@ -54,7 +50,10 @@ class ItemStream(object):
         return self.behind(1)
 
     def this(self):
-        return self._stream[self.i]
+        try:
+            return self._stream[self.i]
+        except IndexError:
+            raise StopIteration()
 
     def ahead(self, i, j=None):
         '''Raising stopiteration with end the parse.

@@ -2,7 +2,8 @@ import re
 import functools
 from collections import defaultdict
 
-from tater.base.lexer.utils import include
+from tater.base.lexer.utils import include, Rule
+from tater.base.lexer.exceptions import BogusIncludeError
 
 
 class _BaseCompiler(object):
@@ -31,8 +32,17 @@ class _BaseCompiler(object):
 
         for rule in rules:
             if isinstance(rule, include):
-                self._process_rules(state, self.tokendefs[rule])
+                try:
+                    rules = self.tokendefs[rule]
+                except KeyError:
+                    msg = (
+                        "Can't include undefined state %r. Did you forget "
+                        "do define the state %r in your lexer?")
+                    raise BogusIncludeError(msg % (rule, rule))
+                self._process_rules(state, rules)
                 continue
+
+            rule = Rule(*rule)
 
             _rgxs = []
             _append = _rgxs.append

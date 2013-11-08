@@ -109,3 +109,5 @@ def string_to_tokentype(s):
     for item in s.split('.'):
         node = getattr(node, item)
     return node
+
+

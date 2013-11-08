@@ -6,7 +6,7 @@
 
 from __future__ import absolute_import
 
-VERSION = (0, 0, 2, 'cow')
+VERSION = (0, 0, 2, '')
 __version__ = '.'.join(str(p) for p in VERSION[0:3]) + ''.join(VERSION[3:])
 __author__ = 'Thom Neale'
 __contact__ = 'twneale@gmail.com'
@@ -15,13 +15,12 @@ __docformat__ = 'restructuredtext'
 __all__ = [
     'Lexer', 'DebugLexer', 'Token', 'include', 'bygroups', 'Rule',
     'Node', 'tokenseq',
-    '__version__',
-]
+    '__version__']
 
 # -eof meta-
 
 from tater.base.lexer import *
 from tater.base.node import *
 
-from tater.core.parser import parse
+from tater.core.parser import Parser
 from tater.core.dispatchers import *
