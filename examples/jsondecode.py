@@ -22,12 +22,10 @@ import re
 import json
 
 from tater import new_basenode, tokenseq, token_subtypes
-from tater import Lexer, DebugLexer, Parser, bygroups, include
+from tater import Lexer, Parser, bygroups, include
 
 
-class JsonLexer(DebugLexer):
-    import logging
-    DEBUG = logging.DEBUG
+class JsonLexer(Lexer):
 
     re_skip = r'\s+'
     dont_emit = ('comma',)
@@ -173,8 +171,7 @@ class Literal(Node):
         'Literal.Number.Int': int,
         'Literal.Bool': lambda s: s == 'true',
         'Literal.Null': lambda s: None,
-        'Literal.String': lambda s: s.decode('utf-8'),
-    }
+        'Literal.String': lambda s: s.decode('utf-8')}
 
     def decode(self):
         first = self.first()
@@ -192,6 +189,7 @@ def main():
         "obj": {"a": 1}
         }'''
 
+    import pdb; pdb.set_trace()
     for item in JsonLexer(text):
         print item
 

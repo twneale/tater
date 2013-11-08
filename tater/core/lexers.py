@@ -1,30 +1,34 @@
 import logging
 
 from tater.core import config
-from tater.base.lexer import _LexerBase, _DebugLexerBase, tokendefs
+from tater.base.lexer import _RegularLexerBase, _DebugLexerBase, tokendefs
 from tater.base.lexer.exceptions import ConfigurationError
 from tater.utils import CachedClassAttribute
 
 
 class Lexer(object):
 
+    pos = 0
+    re_skip = None
+    raise_incomplete = True
+    dont_emit = []
+    statestack = ['root']
+
     def __init__(self, *args, **kwargs):
         self.args = args
-        self.kwargs = kwargs
         self.config = config
         if not hasattr(self, 'tokendefs'):
             msg = "Lexer subclasses must have a top level 'tokendefs' attribute."
             raise ConfigurationError(msg)
+        self.kwargs = kwargs
 
     @CachedClassAttribute
     def regular_lexer(cls):
-        attrs = dict(tokendefs=cls.tokendefs)
-        return type(cls.__name__, (_LexerBase,), attrs)
+        return type(cls.__name__, (_RegularLexerBase,), dict(cls.__dict__))
 
     @CachedClassAttribute
     def debug_lexer(cls):
-        attrs = dict(tokendefs=cls.tokendefs)
-        return type(cls.__name__, (_DebugLexerBase,), attrs)
+        return type(cls.__name__, (_DebugLexerBase,), dict(cls.__dict__))
 
     def __iter__(self):
 

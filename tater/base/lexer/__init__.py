@@ -40,14 +40,17 @@ class DebugLexerMeta(type):
 
 
 class _LexerBase(object):
-    '''Basic regex Lexer.
-    '''
-    __metaclass__ = LexerMeta
     pos = 0
     re_skip = None
     raise_incomplete = True
     dont_emit = []
     statestack = ['root']
+
+
+class _RegularLexerBase(_LexerBase):
+    '''Basic regex Lexer.
+    '''
+    __metaclass__ = LexerMeta
 
     def __init__(self, text, **kwargs):
         '''Text is the input string to lex. Pos is the
@@ -192,7 +195,7 @@ class _LexerBase(object):
                 pos += 1
 
 
-class _DebugLexerBase(object):
+class _DebugLexerBase(_LexerBase):
     '''Extremely noisy debug version of the basic lexer.
     '''
     __metaclass__ = DebugLexerMeta
@@ -203,14 +206,14 @@ class _DebugLexerBase(object):
     class _MatchFound(Exception):
         pass
 
-    def __init__(self, text, pos=0, statestack=None, **kwargs):
+    def __init__(self, text, pos=None, statestack=None, **kwargs):
         '''Text is the input string to lex. Pos is the
         position at which to start, or 0.
         '''
         # Set initial state.
         self.text = text
-        self.pos = pos
-        self.statestack = statestack or ['root']
+        self.pos = pos or self.pos
+        self.statestack = statestack or self.statestack
         self.Item = get_itemclass(text)
 
         if hasattr(self, 're_skip'):

@@ -34,7 +34,6 @@ class TestSimpleTokendefs(TestCase):
         (10, 14, 'lower')]
 
     def test_lexer(self):
-        import nose.tools;nose.tools.set_trace()
-        items = list(SimpleLexer(self.text, debug=True))
+        items = list(SimpleLexer(self.text))
         items = map(tuple, items)
         self.assertEqual(items, self.expected)
