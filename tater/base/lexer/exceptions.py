@@ -7,3 +7,8 @@ class IncompleteLex(Exception):
 class BogusIncludeError(Exception):
     '''Raised if the lexer tries to ``include`` a nonexistent state.
     '''
+
+
+class ConfigurationError(Exception):
+    '''Raised is lexer is misconfigured.
+    '''

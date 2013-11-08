@@ -19,7 +19,7 @@ __all__ = [
     'Rule', 'IncompleteLex']
 
 
-class _LexerMeta(type):
+class LexerMeta(type):
     '''Metaclass for the regular Lexer.
     '''
     def __new__(meta, name, bases, attrs):
@@ -29,7 +29,7 @@ class _LexerMeta(type):
         return cls
 
 
-class _DebugLexerMeta(type):
+class DebugLexerMeta(type):
     '''Metaclass for the DebugLexer.
     '''
     def __new__(meta, name, bases, attrs):
@@ -39,11 +39,10 @@ class _DebugLexerMeta(type):
         return cls
 
 
-class Lexer(object):
+class _LexerBase(object):
     '''Basic regex Lexer.
     '''
-    __metaclass__ = _LexerMeta
-
+    __metaclass__ = LexerMeta
     pos = 0
     re_skip = None
     raise_incomplete = True
@@ -81,6 +80,7 @@ class Lexer(object):
         re_skip = self.re_skip
         text_len = len(text)
         dont_emit = self.dont_emit or []
+        raise_incomplete = self.raise_incomplete
 
         if re_skip is not None:
             re_skip = re.compile(re_skip).match
@@ -176,6 +176,7 @@ class Lexer(object):
                 # -----------------------------------------------------------------
                 try:
                     statestack.pop()
+                    break
                 except IndexError:
                     # We're all out of states to try. Raise an error if the
                     # raise_incomplete is true.
@@ -191,10 +192,10 @@ class Lexer(object):
                 pos += 1
 
 
-class DebugLexer(object):
+class _DebugLexerBase(object):
     '''Extremely noisy debug version of the basic lexer.
     '''
-    __metaclass__ = _DebugLexerMeta
+    __metaclass__ = DebugLexerMeta
 
     class _Finished(Exception):
         pass
@@ -202,7 +203,7 @@ class DebugLexer(object):
     class _MatchFound(Exception):
         pass
 
-    def __init__(self, text, pos=0, statestack=None):
+    def __init__(self, text, pos=0, statestack=None, **kwargs):
         '''Text is the input string to lex. Pos is the
         position at which to start, or 0.
         '''
@@ -210,7 +211,6 @@ class DebugLexer(object):
         self.text = text
         self.pos = pos
         self.statestack = statestack or ['root']
-        self.defs = self.tokendefs['root']
         self.Item = get_itemclass(text)
 
         if hasattr(self, 're_skip'):
@@ -218,15 +218,8 @@ class DebugLexer(object):
         else:
             self.re_skip = None
 
-        # Debug logging. Yuck.
-        DEBUG = None
-        if '-q' not in sys.argv[1:]:
-            DEBUG = getattr(self, 'DEBUG', None)
-
-        if '-v' in sys.argv[1:]:
-            DEBUG = logging.DEBUG
-
-        def debug_func(func, debug=DEBUG is not None,
+        loglevel = kwargs['loglevel']
+        def debug_func(func, debug=loglevel is not None,
                        log_msg_maxwidth=LOG_MSG_MAXWIDTH):
             @functools.wraps(func)
             def wrapped(msg):
@@ -235,7 +228,7 @@ class DebugLexer(object):
             return wrapped
 
         logger = logging.getLogger('tater.%s' % self.__class__.__name__)
-        logger.setLevel(getattr(self, 'DEBUG', logging.FATAL))
+        logger.setLevel(loglevel)
         self.debug = debug_func(logger.debug)
         self.info = debug_func(logger.info)
         self.warn = debug_func(logger.warn)
@@ -251,8 +244,9 @@ class DebugLexer(object):
                 return
             try:
                 for item in self.scan():
-                    self.info('  %r' % (item,))
-                    yield Item(*item)
+                    item = Item(*item)
+                    self.warn('  %r' % (item,))
+                    yield item
             except self._Finished:
                 return
 
@@ -272,11 +266,11 @@ class DebugLexer(object):
 
         dont_emit = getattr(self, 'dont_emit', [])
         try:
-            for pos, token, text in self._process_state(defs):
+            for start, end, token in self._process_state(defs):
                 if token in dont_emit:
                     pass
                 else:
-                    yield pos, token, text
+                    yield start, end, token
         except self._MatchFound:
             self.debug('  _scan: match found--returning.')
             return

@@ -20,9 +20,12 @@ __all__ = [
 
 # -eof meta-
 
-from tater.base.lexer import *
 from tater.base.node import *
+from tater.base.visitor import *
+from tater.base.lexer.utils import *
 
+from tater.core.lexers import Lexer
 from tater.core.parser import Parser
 from tater.core.dispatchers import *
 from tater.core.scanners import *
+

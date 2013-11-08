@@ -9,6 +9,8 @@ from tater.base.lexer.exceptions import BogusIncludeError
 
 class _BaseCompiler(object):
     _re_type = type(re.compile(''))
+    def _process_re_type(self, rgx):
+        return rgx.match
 
     def __init__(self, cls):
         self.cls = cls
@@ -25,7 +27,7 @@ class _BaseCompiler(object):
         getfunc = {
             unicode: re_compile,
             str: re_compile,
-            self._re_type: attrgetter('match')
+            self._re_type: self._process_re_type
             }
 
         append = self.compiled[state].append
@@ -82,4 +84,8 @@ class Compiler(_BaseCompiler):
 class DebugCompiler(_BaseCompiler):
     def re_compile(self, flags, text, re_compile=re.compile):
         return re.compile(text, flags)
+
+    def _process_re_type(self, rgx):
+        return rgx
+
 

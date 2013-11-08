@@ -39,6 +39,7 @@ class Scanner(object):
         self.text = text
         self.pos = pos
         self.lexer = self.lexer or lexer
+        self.lexer.raise_incomplete = False
         self.hooks = self.hooks or list(self.get_hooks())
 
     def __iter__(self):

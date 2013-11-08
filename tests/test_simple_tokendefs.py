@@ -4,11 +4,10 @@ Ultra simple HTML parser example.
 '''
 import logging
 from unittest import TestCase
-from tater import Lexer, DebugLexer
+from tater import Lexer
 
 
-class SimpleLexer(DebugLexer):
-    # DEBUG = logging.DEBUG
+class SimpleLexer(Lexer):
     re_skip = r'\s+'
 
     tokendefs = {
@@ -35,5 +34,7 @@ class TestSimpleTokendefs(TestCase):
         (10, 14, 'lower')]
 
     def test_lexer(self):
-        items = list(SimpleLexer(self.text))
+        import nose.tools;nose.tools.set_trace()
+        items = list(SimpleLexer(self.text, debug=True))
+        items = map(tuple, items)
         self.assertEqual(items, self.expected)
