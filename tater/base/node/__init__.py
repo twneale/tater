@@ -13,22 +13,7 @@ from tater.utils.itemstream import ItemStream
 from tater.base.node.nodespace import NodeSpace
 from tater.base.node.resolvers import (
     MetaclassRegistryResolver, LazyImportResolver, LazyTypeCreator)
-
-
-matches = 1
-matches_subtypes = 2
-
-
-class ConfigurationError(Exception):
-    '''The user-defined ast models were screwed up.
-    '''
-
-
-class ParseError(Exception):
-    '''
-    The tokens weren't matched against any suitable method
-    on the current node.
-    '''
+from tater.base.node.exceptions import ConfigurationError, ParseError
 
 
 class _NodeMeta(type):
@@ -508,7 +493,7 @@ class BaseNode(object):
         return node
 
 
-def get_basenode():
+def new_basenode():
     '''Create a new base node type with its own distinct nodespace.
     This provides a way to reuse node names without name conflicts in the
     metaclass cache.
@@ -516,4 +501,4 @@ def get_basenode():
     return type('Node', (BaseNode,), dict(nodespace=NodeSpace()))
 
 
-Node = get_basenode()
+Node = new_basenode()

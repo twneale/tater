@@ -14,7 +14,7 @@ __homepage__ = 'http://twneale.github.io/tater'
 __docformat__ = 'restructuredtext'
 __all__ = [
     'Lexer', 'DebugLexer', 'Token', 'include', 'bygroups', 'Rule',
-    'Node', 'tokenseq',
+    'Node', 'tokenseq', 'Scanner',
     '__version__']
 
 # -eof meta-
@@ -24,3 +24,4 @@ from tater.base.node import *
 
 from tater.core.parser import Parser
 from tater.core.dispatchers import *
+from tater.core.scanners import *

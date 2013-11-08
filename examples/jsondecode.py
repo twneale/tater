@@ -21,7 +21,7 @@
 import re
 import json
 
-from tater import get_basenode, tokenseq, token_subtypes
+from tater import new_basenode, tokenseq, token_subtypes
 from tater import Lexer, DebugLexer, Parser, bygroups, include
 
 
@@ -78,7 +78,7 @@ class JsonLexer(DebugLexer):
         }
 
 
-Node = get_basenode()
+Node = new_basenode()
 
 
 class JsonRoot(Node):

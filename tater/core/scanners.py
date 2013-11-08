@@ -1,9 +1,11 @@
 import re
 from operator import methodcaller
 
-from tater import parse
-from tater.node import ParseError
-from tater.visitors import get_span
+from tater.base.node import ParseError
+from tater.core.visitors import get_span
+
+
+__all__ = ["Scanner"]
 
 
 class Scanner(object):
@@ -87,7 +89,7 @@ class Scanner(object):
             # parse should return None if there're no input items.
             items = list(self.lexer(self.text, start_pos))
             # pprint.pprint(items)
-            tree = parse(start, items)
+            tree = start.parse(items)
         except ParseError as exc:
             self.handle_parse_error(start, exc)
 
