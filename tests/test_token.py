@@ -29,7 +29,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """
 import unittest
-from tater.core import Token as t
+from tater import Token as t
+from tater.core.tokentype import _TokenType, is_token_subtype
 
 
 class TokenTest(unittest.TestCase):

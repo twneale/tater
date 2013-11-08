@@ -1,8 +1,0 @@
-- need to handle single tuple or lsit of items
-- make actual ast node be "node" off of subclass?
-- itemiterator index is totally fucked
-- need shortcuts for descend, pass, ignore, etc. Too much boilerplate.
-- need helpers for multiple descend like self.descend(Vol).descend(Reporter).descend(Number)
-- visitors should be as functional as possible; return the tree after visiting
-- for the love of god. need a namedtuple for working with items
-- need methods for querying the tree
