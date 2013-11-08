@@ -1,7 +1,7 @@
 from unittest import TestCase
 from nose.tools import assert_equals
 
-from tater import Node, parse
+from tater import Node
 
 
 class TestLazyImportResolver(TestCase):

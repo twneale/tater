@@ -1,34 +1,19 @@
 import uuid
-import types
 import inspect
 from collections import defaultdict
 
 from tater.core.tokentype import Token
 
 from tater.utils import (
-        CachedAttr, NoClobberDict, KeyClobberError, memoize_methodcalls)
+        CachedAttr, CachedClassAttribute, NoClobberDict,
+        KeyClobberError, memoize_methodcalls)
 from tater.utils.chainmap import ChainMap
 from tater.utils.itemstream import ItemStream
 
 from tater.base.node.nodespace import NodeSpace
 from tater.base.node.resolvers import (
     MetaclassRegistryResolver, LazyImportResolver, LazyTypeCreator)
-
-
-matches = 1
-matches_subtypes = 2
-
-
-class ConfigurationError(Exception):
-    '''The user-defined ast models were screwed up.
-    '''
-
-
-class ParseError(Exception):
-    '''
-    The tokens weren't matched against any suitable method
-    on the current node.
-    '''
+from tater.base.node.exceptions import ConfigurationError, ParseError
 
 
 class _NodeMeta(type):
@@ -108,14 +93,12 @@ class _NodeMeta(type):
         # Update the class's nodespace.
         if 'nodespace' in _attrs:
             cls.nodespace.register(cls)
-
         return cls
 
 
-class Node(object):
+class BaseNode(object):
     __metaclass__ = _NodeMeta
 
-    nodespace = NodeSpace()
     noderef_resolvers = (
         MetaclassRegistryResolver,
         LazyImportResolver,
@@ -127,6 +110,9 @@ class Node(object):
 
     def __repr__(self):
         return '%s(%r)' % (self.__class__.__name__, self.items,)
+
+    def __iter__(self):
+        return iter(self.children)
 
     def getroot(self):
         this = self
@@ -140,9 +126,9 @@ class Node(object):
         various resolver methods may be slow, so the results of this
         function get memoized.
         '''
-        if isinstance(ref, types.ClassType):
-            return ref
-        return self.nodespace.resolve(ref)
+        if isinstance(ref, basestring):
+            return self.nodespace.resolve(ref)
+        return ref
 
     def resolve(self, itemstream):
         '''Try to resolve the incoming stream against the functions
@@ -156,7 +142,7 @@ class Node(object):
             if method is not None:
                 return method(self, *matched_items)
 
-        # No matched functions were found.
+        # Itemstream is exhausted.
         if not itemstream:
             raise StopIteration()
 
@@ -169,136 +155,6 @@ class Node(object):
             i = itemstream.i
             stream = list(itemstream._stream)[i:i+10]
             raise ParseError(msg % (self, stream))
-
-    def append(self, child, related=True, edge=None):
-        '''Related is false when you don't want the child to become
-        part of the resulting data structure, as in the case of the
-        start node.
-        '''
-        if related:
-            child.parent = self
-            self.children.append(child)
-            # Make child ctx lookups fail over to parent.
-            self.ctx.adopt(child.ctx)
-            if edge is not None:
-                self.edge_map[edge] = child
-        return child
-
-    def insert(self, index, child):
-        '''Insert a child node a specific index.
-        '''
-        child.parent = self
-        self.ctx.adopt(child.ctx)
-        self.children.insert(index, child)
-        return child
-
-    def index(self):
-        '''Return the index of this node in its parent's children
-        list.
-        '''
-        parent = self.parent
-        if parent is not None:
-            return parent.children.index(self)
-
-    def ascend(self, cls, items=None, related=True):
-        '''Create a new parent node. Set it as the
-        parent of this node. Return the parent.
-        '''
-        items = items or []
-        parent = cls(*items)
-        parent.append(self, related)
-        return parent
-
-    def detatch(self):
-        '''Remove this node from parent.
-        '''
-        self.parent.remove(self)
-        return self
-
-    def descend(self, cls, items=None, edge=None, transfer=False):
-        items = items or []
-
-        # Put single item into a list. This sucks.
-        if items and isinstance(items[0], int):
-            items = [items]
-
-        child = cls(*items)
-        if transfer:
-            child.children.extend(self.children)
-            self.children = []
-        return self.append(child, edge=edge)
-
-    def remove(self, child):
-        'Um, should this return something? Not sure.'
-        self.children.remove(child)
-
-    def swap(self, cls, items=None):
-        '''Swap cls(*items) for this node and make this node
-        it's child.
-        '''
-        items = items or []
-        new_parent = self.parent.descend(cls, items)
-        self.parent.remove(self)
-        new_parent.append(self)
-        return new_parent
-
-    def replace(self, cls_or_node, items=None, transfer=False):
-        '''Replace this node wholesale with the specified child.
-        Preserve order.
-        '''
-        items = items or []
-        parent = self.parent
-        children = parent.children
-        index = children.index(self)
-
-        # Remove this node.
-        children.remove(self)
-
-        if isinstance(cls_or_node, Node):
-            # If a node was passed in, insert it.
-            new_node = cls_or_node
-        else:
-            # Otherwise create a new node.
-            cls = cls_or_node
-            new_node = cls(*items)
-            new_node.ctx = self.ctx
-            new_node.local_ctx = self.local_ctx
-
-        if transfer:
-            new_node.children.extend(self.children)
-
-        return parent.insert(index, new_node)
-
-    def pop(self):
-        '''Just for readability and clarity about what it means
-        to return the parent.'''
-        return self.parent
-
-    def extend(self, *items):
-        self.items.extend(items)
-        return self
-
-    def first_token(self):
-        return self.items[0][1]
-
-    def first_text(self):
-        if self.items:
-            return self.items[0][2]
-        else:
-            # XXX: such crap
-            return ''
-
-    def pprint(self, offset=0):
-        print offset * ' ', '-', self
-        for child in self.children:
-            child.pprint(offset + 2)
-
-    def pformat(self, offset=0, buf=None):
-        buf = buf or []
-        buf.extend([offset * ' ', ' - ', repr(self), '\n'])
-        for child in self.children:
-            child.pformat(offset + 2, buf)
-        return ''.join(buf)
 
     @CachedAttr
     def ctx(self):
@@ -338,15 +194,204 @@ class Node(object):
         self.local_ctx['uuid'] = _id
         return _id
 
+    def __eq__(self, other):
+        if self.__class__ is not other.__class__:
+            return False
+
+        # Don't care if the items are a list or tuple.
+        if tuple(self.items) != tuple(other.items):
+            return False
+
+        if self.children != other.children:
+            return False
+
+        if self.ctx != other.ctx:
+            return False
+
+        return True
+
+    @classmethod
+    def parse(cls_or_inst, itemiter, **options):
+        '''Supply a user-defined start class.
+        '''
+        itemstream = ItemStream(itemiter)
+
+        if callable(cls_or_inst):
+            node = cls_or_inst()
+        else:
+            node = cls_or_inst
+
+        while 1:
+            try:
+                if options.get('debug'):
+                    print '%r <-- %r' % (node, itemstream)
+                    node.getroot().pprint()
+                node = node.resolve(itemstream)
+            except StopIteration:
+                break
+        return node.getroot()
+
+    # -----------------------------------------------------------------------
+    # Low-level mutation methods. String references to types not allowed.
+    # -----------------------------------------------------------------------
+    def append(self, child, related=True, edge=None):
+        '''Related is false when you don't want the child to become
+        part of the resulting data structure, as in the case of the
+        start node.
+        '''
+        if related:
+            child.parent = self
+            self.children.append(child)
+            # Make child ctx lookups fail over to parent.
+            self.ctx.adopt(child.ctx)
+            if edge is not None:
+                self.edge_map[edge] = child
+        return child
+
+    def insert(self, index, child):
+        '''Insert a child node a specific index.
+        '''
+        child.parent = self
+        self.ctx.adopt(child.ctx)
+        self.children.insert(index, child)
+        return child
+
+    def index(self):
+        '''Return the index of this node in its parent's children
+        list.
+        '''
+        parent = self.parent
+        if parent is not None:
+            return parent.children.index(self)
+
+    def detatch(self):
+        '''Remove this node from parent.
+        '''
+        self.parent.remove(self)
+        return self
+
+    def remove(self, child):
+        'Um, should this return something? Not sure.'
+        self.children.remove(child)
+
+    # -----------------------------------------------------------------------
+    # High-level mutation methods. String references to types allowed.
+    # -----------------------------------------------------------------------
+    def ascend(self, cls_or_name, items=None, related=True):
+        '''Create a new parent node. Set it as the
+        parent of this node. Return the parent.
+        '''
+        cls = self.resolve_noderef(cls_or_name)
+        items = items or []
+        parent = cls_or_name(*items)
+        parent.append(self, related)
+        return parent
+
+    def descend(self, cls_or_name, items=None):
+        cls = self.resolve_noderef(cls_or_name)
+        items = items or []
+
+        # Put single item into a list. This sucks.
+        if items and isinstance(items[0], int):
+            items = [items]
+
+        child = cls(*items)
+        return self.append(child)
+
+    def descend_many(self, *cls_or_name_seq):
+        this = self
+        for cls_or_name in cls_or_name_seq:
+            cls = self.resolve_noderef(cls_or_name)
+            child = cls()
+            this = this.append(child)
+        return this
+
+    def swap(self, cls_or_name, items=None):
+        '''Swap cls(*items) for this node and make this node
+        it's child.
+        '''
+        cls = self.resolve_noderef(cls_or_name)
+        items = items or []
+        new_parent = self.parent.descend(cls, items)
+        self.parent.remove(self)
+        new_parent.append(self)
+        return new_parent
+
+    def replace(self, cls_or_node_or_name, items=None, transfer=False):
+        '''Replace this node wholesale with the specified child.
+        Preserve order.
+        '''
+        if isinstance(cls_or_node_or_name, basestring):
+            cls = self.resolve_noderef(cls_or_node_or_name)
+        items = items or []
+        parent = self.parent
+        children = parent.children
+        index = children.index(self)
+
+        # Remove this node.
+        children.remove(self)
+
+        if isinstance(cls_or_node_or_name, Node):
+            # If a node was passed in, insert it.
+            new_node = cls_or_node_or_name
+        else:
+            # Otherwise create a new node.
+            cls = cls_or_node_or_name
+            new_node = cls(*items)
+            new_node.ctx = self.ctx
+            new_node.local_ctx = self.local_ctx
+
+        if transfer:
+            new_node.children.extend(self.children)
+
+        return parent.insert(index, new_node)
+
+    # -----------------------------------------------------------------------
+    # Readability functions.
+    # -----------------------------------------------------------------------
+    def pop(self):
+        '''Just for readability and clarity about what it means
+        to return the parent.'''
+        return self.parent
+
+    def extend(self, *items):
+        self.items.extend(items)
+        return self
+
+    def first(self):
+        return self.items[0]
+
+    def first_token(self):
+        return self.items[0].token
+
+    def first_text(self):
+        if self.items:
+            return self.items[0].text
+        else:
+            # XXX: such crap
+            return ''
+
+    def pprint(self, offset=0):
+        print offset * ' ', '-', self
+        for child in self.children:
+            child.pprint(offset + 2)
+
+    def pformat(self, offset=0, buf=None):
+        buf = buf or []
+        buf.extend([offset * ' ', ' - ', repr(self), '\n'])
+        for child in self.children:
+            child.pformat(offset + 2, buf)
+        return ''.join(buf)
+
+    #------------------------------------------------------------------------
+    # Querying methods.
+    #------------------------------------------------------------------------
     def _depth_first(self):
         yield self
         for child in self.children:
             for node in child._depth_first():
                 yield node
 
-    #------------------------------------------------------------------------
-    # Querying methods.
-    #------------------------------------------------------------------------
     def has_siblings(self):
         parent = getattr(self, 'parent', None)
         if parent is None:
@@ -400,7 +445,9 @@ class Node(object):
         for node in self.find(type_):
             return node
 
+    #------------------------------------------------------------------------
     # Serialization methods.
+    #------------------------------------------------------------------------
     def as_data(self):
         items = []
         for (pos, token, text) in self.items:
@@ -445,20 +492,13 @@ class Node(object):
             node._local_ctx = data['local_ctx']
         return node
 
-    def __eq__(self, other):
-        if self.__class__ is not other.__class__:
-            return False
 
-        # Don't care if the items are a list or tuple.
-        if tuple(self.items) != tuple(other.items):
-            return False
-
-        if self.children != other.children:
-            return False
-
-        if self.ctx != other.ctx:
-            return False
-
-        return True
+def new_basenode():
+    '''Create a new base node type with its own distinct nodespace.
+    This provides a way to reuse node names without name conflicts in the
+    metaclass cache.
+    '''
+    return type('Node', (BaseNode,), dict(nodespace=NodeSpace()))
 
 
+Node = new_basenode()

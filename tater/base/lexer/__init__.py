@@ -1,6 +1,7 @@
 import re
 import sys
 import logging
+import functools
 
 from tater.core.config import LOG_MSG_MAXWIDTH
 from tater.core.tokentype import _TokenType
@@ -116,14 +117,16 @@ class Lexer(object):
                     for rexmatch in rgxs:
                         m = rexmatch(text, pos)
                         if m:
-                            if isinstance(token, _TokenType):
+                            if token in dont_emit:
+                                pass
+                            elif isinstance(token, (_TokenType, basestring)):
                                 start, end = m.span()
-                                yield start, end, token
+                                yield Item(start, end, token)
                             else:
                                 matched = m.group()
                                 for token, (start, end) in zip(token, m.regs[1:]):
-                                    assert start == pos + matched.index(text)
-                                    yield start, end, token
+                                    assert start == pos + matched.index(text[start:end])
+                                    yield Item(start, end, token)
 
                             # Advance the text offset.
                             pos = m.end()
@@ -137,19 +140,26 @@ class Lexer(object):
                             else:
                                 if pop:
                                     if isinstance(pop, bool):
-                                        popped = statestack.pop()
+                                        statestack.pop()
                                     elif isinstance(pop, int):
                                         for i in range(pop):
-                                            popped = statestack.pop()
+                                            statestack.pop()
 
                                     # If it's a set, pop all that match.
                                     elif isinstance(pop, set):
                                         while statestack[-1] in pop:
-                                            popped = statestack.pop()
+                                            statestack.pop()
 
                                 if push:
                                     if isinstance(push, basestring):
-                                        statestack.append(push)
+                                        if push == '#pop':
+                                            statestack.pop()
+                                        elif push.startswith('#pop:'):
+                                            numpop = push.replace('#pop:', '')
+                                            for i in range(numpop):
+                                                statestack.pop()
+                                        else:
+                                            statestack.append(push)
                                     else:
                                         for state in push:
                                             statestack.append(state)
@@ -326,7 +336,7 @@ class DebugLexer(object):
             if m:
                 self.info('  _process_rule: match found: %s' % m.group())
                 self.info('  _process_rule: pattern: %r' % rgx.pattern)
-                if isinstance(token, _TokenType):
+                if isinstance(token, (_TokenType, basestring)):
                     start, end = m.span()
                     yield start, end, token
                 else:
@@ -376,7 +386,14 @@ class DebugLexer(object):
             if push:
                 self.info('  _update_state: pushing %r' % (push,))
                 if isinstance(push, basestring):
-                    statestack.append(push)
+                    if push == '#pop':
+                        statestack.pop()
+                    elif push.startswith('#pop:'):
+                        numpop = push.replace('#pop:', '')
+                        for i in range(numpop):
+                            statestack.pop()
+                    else:
+                        statestack.append(push)
                 else:
                     self.info('  _update_state: pushing all %r' % (push,))
                     msg = '    _update_state: pushing %r'

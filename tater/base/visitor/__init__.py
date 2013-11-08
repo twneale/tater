@@ -19,7 +19,7 @@ class Visitor(object):
 
     @CachedAttr
     def _methods(self):
-        return _MethodDict(visitor=self)
+        return MethodDict(visitor=self)
 
     def visit(self, node):
         self.node = node

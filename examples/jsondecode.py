@@ -19,146 +19,187 @@
     +---------------+-------------------+
 '''
 import re
+import json
 
-from tater.node import Node, matches, matches_subtypes
-from tater.core import RegexLexer, bygroups, parse, include
-from tater.core import Rule as r
-from tater.tokentype import Token as t
+from tater import new_basenode, tokenseq, token_subtypes
+from tater import Lexer, DebugLexer, Parser, bygroups, include
 
 
-class Tokenizer(RegexLexer):
-    # import logging
-    # DEBUG = logging.DEBUG
+class JsonLexer(DebugLexer):
+    import logging
+    DEBUG = logging.DEBUG
 
-    re_skip = r'[,\s]+'
+    re_skip = r'\s+'
+    dont_emit = ('comma',)
 
     tokendefs = {
         'root': [
-            r(t.OpenBrace, '{', 'object'),
-            ],
-
-        'literals': [
-            r(t.Literal.Number.Real, '\d+\.\d*'),
-            r(t.Literal.Number.Int, '\d+'),
-            r(bygroups(t.Literal.String), r'"((?:\\")?.+?[^\\])"'),
-            r(t.Literal.Bool, '(?:true|false)'),
-            r(t.Literal.Null, 'null'),
-            ],
-
-        'object.item': [
-            include('object.key'),
-            include('object.value'),
-            include('literals'),
-            ],
-
-        'object.key': [
-            r(bygroups(t.KeyName), r'"([^\\]+?)"\s*:'),
-            ],
-
-        'object.value': [
-            include('literals'),
-            # include('object'),
-            include('array'),
+            ('Brace.Open', '\{', 'object'),
+            ('Bracket.Open', '\[', 'array'),
             ],
 
         'object': [
-            r(t.OpenBrace, '{', 'object'),
-            r(t.OpenBracket, r'\[', push='array'),
             include('object.item'),
-            r(t.CloseBrace, '}', pop=True),
+            ('Brace.Close', '\}', '#pop'),
+            ],
+
+        'object.item': [
+            include('object.item.key'),
+            ],
+
+        'object.item.key': [
+            (bygroups('Key'), r'"([^\\]+?)"\s*:', 'object.item.value'),
+            ],
+
+        'object.item.value': [
+            include('root'),
+            include('literals'),
+            ('Comma', ',', '#pop'),
             ],
 
         'array': [
-            # include('object'),
+            include('array.item'),
+            ('Bracket.Close', r'\]', '#pop'),
+            ],
+
+        'array.item': [
+            include('root'),
             include('literals'),
-            r(t.CloseBracket, r'\]', pop=True),
+            ('Comma', ','),
+            ],
+
+        'literals': [
+            ('Literal.Number.Real', '\d+\.\d*'),
+            ('Literal.Number.Int', '\d+'),
+            (bygroups('Literal.String'), r'"((?:\\")?.+?[^\\])"'),
+            ('Literal.Bool', '(?:true|false)'),
+            ('Literal.Null', 'null'),
             ],
         }
 
 
-class Root(Node):
+Node = new_basenode()
 
-    @matches(t.OpenBracket)
-    def start_array(self, *items):
-        return self.descend(JsonArray)
 
-    @matches(t.OpenBrace)
+class JsonRoot(Node):
+
+    @tokenseq('Brace.Open')
     def start_object(self, *items):
-        return self.descend(JsonObject)
+        return self.descend_many('Object', 'ObjectItem')
 
-    @matches_subtypes(t.Literal)
-    def handle_literal(self, *items):
-        return self.descend(JsonLiteral, items)
-
-
-class JsonLiteral(Node):
-
-    _to_json = {
-        t.Literal.Number.Real: float,
-        t.Literal.Number.Int: int,
-        t.Literal.Bool: bool,
-        t.Literal.Null: lambda x: None,
-        t.Literal.String: lambda s: re.sub(r'\\"', '"', s).decode('utf-8'),
-        }
+    @tokenseq('Bracket.Open')
+    def start_array(self, *items):
+        return self.descend('Array')
 
     def decode(self):
-        assert len(self.items) is 1
-        _, token, text = self.items.pop()
-        return self._to_json[token](text)
+        return next(iter(self)).decode()
 
 
-class JsonObject(Node):
+class Value(JsonRoot):
 
-    @matches(t.KeyName)
-    def handle_keyname(self, *items):
-        return self.descend(JsonObjectItem, items)
+    @token_subtypes('Literal')
+    def handle_literal(self, *items):
+        return self.descend('Literal', items).pop()
 
-    @matches(t.CloseBrace)
+
+class Object(Node):
+
+    @tokenseq('Comma')
+    def end_item(self, *items):
+        return self.descend('ObjectItem')
+
+    @tokenseq('Brace.Close')
     def end_object(self, *items):
+        return self.pop()
+
+    def decode(self):
+        res = {}
+        for node in self:
+            cow = list(node.decode())
+            print cow
+            k, v = cow
+            res[k] = v
+        return res
+        return dict(node.decode() for node in self)
+
+
+class ObjectItem(Node):
+
+    @tokenseq('Key')
+    def handle_key(self, *items):
+        self.descend('ItemKey', items)
+        return self.descend('ItemValue')
+
+    def decode(self):
+        for node in self:
+            yield node.decode()
+
+
+class ItemKey(Node):
+
+    def decode(self):
+        return self.first_text().decode('utf-8')
+
+
+class ItemValue(Value):
+
+    @token_subtypes('Literal')
+    def handle_literal(self, *items):
+        return self.descend('Literal', items).pop()
+
+    def decode(self):
+        for node in self:
+            return node.decode()
+
+
+class Array(Value):
+
+    @tokenseq('Comma')
+    def ignore_comma(self, *items):
         return self
 
-    def decode(self):
-        return dict(item.decode() for item in self.children)
-
-
-class JsonObjectItem(Root):
-
-    def decode(self):
-        assert len(self.items) is 1
-        _, _, key = self.items.pop()
-        return (key, self.children.pop().decode())
-
-
-class JsonArray(Root):
-
-    @matches(t.CloseBracket)
+    @tokenseq('Bracket.Close')
     def end_array(self, *items):
-        return self.parent
+        return self.pop()
 
     def decode(self):
-        return [expr.decode() for expr in self.children]
+        return [node.decode() for node in self]
 
 
-class Start(Node):
+class Literal(Node):
 
-    @matches(t.OpenBrace)
-    def start_object(self, *items):
-        return self.ascend(JsonObject, related=False)
+    to_json = {
+        'Literal.Number.Real': float,
+        'Literal.Number.Int': int,
+        'Literal.Bool': lambda s: s == 'true',
+        'Literal.Null': lambda s: None,
+        'Literal.String': lambda s: s.decode('utf-8'),
+    }
+
+    def decode(self):
+        first = self.first()
+        func = self.to_json[first.token]
+        return func(first.text)
 
 
 def main():
 
     import pprint
-    ff = Tokenizer()
-    s = '{"donkey": 1.23, "b": 3, "pig": true, "zip": null, "arr": [1, 2, "str"], "cow": "\\"pig\'s\\"" }'
-    print s
-    items = list(ff.tokenize(s))
-    pprint.pprint(items)
-    x = parse(Start, iter(items))
-    x.printnode()
-    data = x.decode()
-    import json
-    assert json.loads(s) == data
+    text = '''{
+        "donkey": 1.23, "b": 3, "pig": true,
+        "zip": null, "arr": [1, 2, "str"],
+        "cow": '"pig\\'s"',
+        "obj": {"a": 1}
+        }'''
+
+    for item in JsonLexer(text):
+        print item
+
+    parser = Parser(JsonLexer, JsonRoot, debug=True)
+    tree = parser(text)
+    decoded = tree.decode()
+
+    assert json.loads(text) == decoded
     import pdb;pdb.set_trace()
 
 if __name__ == '__main__':

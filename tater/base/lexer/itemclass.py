@@ -26,8 +26,8 @@ class _ItemBase(tuple):
     def __repr__(self):
         'Return a nicely formatted representation string'
         cls_name = self.__class__.__name__
-        s = '%s(start=%%r, end=%%r, token=%%r)' % cls_name
-        return s % self
+        s = '%s(start=%%r, end=%%r, token=%%r, text=%%r)' % cls_name
+        return s % (self + (self.text,))
 
     def _asdict(self):
         'Return a new OrderedDict which maps field names to their values'
