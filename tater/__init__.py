@@ -28,4 +28,4 @@ from tater.core.lexers import Lexer
 from tater.core.parser import Parser
 from tater.core.dispatchers import *
 from tater.core.scanners import *
-
+from tater.core import visitors

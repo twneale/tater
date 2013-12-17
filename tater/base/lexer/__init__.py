@@ -88,6 +88,7 @@ class _RegularLexerBase(_LexerBase):
         if re_skip is not None:
             re_skip = re.compile(re_skip).match
 
+        import pdb; pdb.set_trace()
         while True:
             if text_len <= pos:
                 # If here, we hit the end of the input. Stop.
@@ -171,28 +172,29 @@ class _RegularLexerBase(_LexerBase):
                             break_state_loop = True
                             break
 
+                    if break_rule_loop:
+                        break
+
+                else:
+                    # ---------------------------------------------------------
+                    # No match found in this state.
+                    # ---------------------------------------------------------
+                    try:
+                        statestack.pop()
+                        # break
+                    except IndexError:
+                        # We're all out of states to try. Raise an error if the
+                        # raise_incomplete is true.
+                        if raise_incomplete:
+                            raise IncompleteLex()
+
+                    if not statestack:
+                        # We popped from the root state.
+                        if raise_incomplete:
+                            raise IncompleteLex()
+
                 if break_state_loop:
                     break
-
-                # -----------------------------------------------------------------
-                # No match found in this state.
-                # -----------------------------------------------------------------
-                try:
-                    statestack.pop()
-                    break
-                except IndexError:
-                    # We're all out of states to try. Raise an error if the
-                    # raise_incomplete is true.
-                    if raise_incomplete:
-                        raise IncompleteLex()
-
-                if not statestack:
-                    # We popped from the root state.
-                    return
-
-            # Advance 1 chr if we tried all the states on the stack.
-            if not statestack:
-                pos += 1
 
 
 class _DebugLexerBase(_LexerBase):
@@ -216,12 +218,10 @@ class _DebugLexerBase(_LexerBase):
         self.statestack = statestack or self.statestack
         self.Item = get_itemclass(text)
 
-        if hasattr(self, 're_skip'):
+        if self.re_skip is not None:
             self.re_skip = re.compile(self.re_skip).match
-        else:
-            self.re_skip = None
 
-        loglevel = kwargs['loglevel']
+        loglevel = kwargs.get('loglevel', logging.DEBUG)
         def debug_func(func, debug=loglevel is not None,
                        log_msg_maxwidth=LOG_MSG_MAXWIDTH):
             @functools.wraps(func)
@@ -251,7 +251,10 @@ class _DebugLexerBase(_LexerBase):
                     self.warn('  %r' % (item,))
                     yield item
             except self._Finished:
-                return
+                if text_len <= self.pos:
+                    return
+                if self.raise_incomplete:
+                    raise IncompleteLex()
 
     def scan(self):
         # Get the tokendefs for the current state.
@@ -283,17 +286,18 @@ class _DebugLexerBase(_LexerBase):
         try:
             self.statestack.pop()
         except IndexError:
+            self.debug('All out of states to process.Stopping.')
             raise self._Finished()
 
         if not self.statestack:
             self.debug('  scan: popping from root state; stopping.')
             # We popped from the root state.
-            return
+            raise self._Finished()
 
-        # Advance 1 chr if we tried all the states on the stack.
-        if not self.statestack:
-            self.info('  scan: advancing 1 char.')
-            self.pos += 1
+        # # Advance 1 chr if we tried all the states on the stack.
+        # if not self.statestack:
+        #     self.info('  scan: advancing 1 char.')
+        #     self.pos += 1
 
     def _process_state(self, defs):
         if self.statestack:
