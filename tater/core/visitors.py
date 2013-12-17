@@ -156,6 +156,17 @@ class EtreeVisitor(Visitor):
         raise self.Continue()
 
 
+class XmlEtreeVisitor(Visitor):
+
+    def visit(self, el):
+        self.el = el
+        self.visit_nodes(el)
+        return self.finalize()
+
+    def get_children(self, el):
+        return tuple(el)
+
+
 # ---------------------------------------------------------------------------
 # Helpers for figuring out the start/end indexes of a parse tree.
 # ---------------------------------------------------------------------------

@@ -24,7 +24,8 @@ class Lexer(object):
 
     @CachedClassAttribute
     def regular_lexer(cls):
-        return type(cls.__name__, (_RegularLexerBase,), dict(cls.__dict__))
+        return type(cls.__name__, (_DebugLexerBase,), dict(cls.__dict__))
+        # return type(cls.__name__, (_RegularLexerBase,), dict(cls.__dict__))
 
     @CachedClassAttribute
     def debug_lexer(cls):

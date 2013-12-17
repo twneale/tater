@@ -3,7 +3,7 @@ import logging
 from tater.core.tokentype import Token
 from tater.utils.itemstream import ItemStream
 from tater.base.node import BaseNode
-
+from tater.base.visitor import Visitor, IteratorVisitor
 
 
 class Parser(object):
@@ -19,6 +19,8 @@ class Parser(object):
         for cls in self.classes:
             if issubclass(cls, BaseNode):
                 input_ = cls.parse(input_, **options)
+            elif issubclass(cls, (Visitor, IteratorVisitor)):
+                input_ = cls().visit(input_)
             else:
                 input_ = cls(input_, **options)
         return input_
