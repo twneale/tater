@@ -1,23 +1,4 @@
 # -*- coding: utf-8 -*-
-'''
-    +===============+===================+
-    | object        | dict              |
-    +---------------+-------------------+
-    | array         | list              |
-    +---------------+-------------------+
-    | string        | unicode           |
-    +---------------+-------------------+
-    | number (int)  | int, long         |
-    +---------------+-------------------+
-    | number (real) | float             |
-    +---------------+-------------------+
-    | true          | True              |
-    +---------------+-------------------+
-    | false         | False             |
-    +---------------+-------------------+
-    | null          | None              |
-    +---------------+-------------------+
-'''
 import re
 import json
 
@@ -69,10 +50,16 @@ class JsonLexer(Lexer):
         'literals': [
             ('Literal.Number.Real', '\d+\.\d*'),
             ('Literal.Number.Int', '\d+'),
-            (bygroups('Literal.String'), r'"((?:\\")?.+?[^\\])"'),
+            ('Quote.Open', r'"', 'string'),
             ('Literal.Bool', '(?:true|false)'),
             ('Literal.Null', 'null'),
             ],
+
+        'string': [
+            ('String', r'\\"'),
+            ('String', r'[^\\"]+'),
+            ('Quote.Close', r'"', '#pop'),
+            ]
         }
 
 
@@ -141,6 +128,10 @@ class ItemKey(Node):
 
 class ItemValue(Value):
 
+    @tokenseq('Quote.Open', 'String')
+    def handle_str(self, quote, string):
+        return self.descend('String', string)
+
     @token_subtypes('Literal')
     def handle_literal(self, *items):
         return self.descend('Literal', items).pop()
@@ -179,13 +170,24 @@ class Literal(Node):
         return func(first.text)
 
 
+class String(Node):
+
+    @tokenseq('String')
+    def handle_str(self, *items):
+        return self.extend(items)
+
+    @tokenseq('Quote.Close')
+    def end_str(self, *items):
+        return self.pop()
+
+
 def main():
 
     import pprint
     text = '''{
         "donkey": 1.23, "b": 3, "pig": true,
         "zip": null, "arr": [1, 2, "str"],
-        "cow": '"pig\\'s"',
+        "cow": "\\"pig's\\"",
         "obj": {"a": 1}
         }'''
 
