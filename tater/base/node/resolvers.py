@@ -1,3 +1,5 @@
+import sys
+
 from tater.utils import CachedAttr
 from tater.core import logger
 from tater.base.node.exceptions import AmbiguousNodeNameError
@@ -14,6 +16,10 @@ class NodeResolver(object):
 
     def resolve(self, name):
         raise NotImplementedError()
+
+
+class AnonymousNodesModule(object):
+    pass
 
 
 class MetaclassRegistryResolver(NodeResolver):
@@ -50,6 +56,9 @@ class LazyImportResolver(NodeResolver):
 class LazyTypeCreator(NodeResolver):
     '''This resolver creates missing types (but warns when it does).
     '''
+    module = AnonymousNodesModule()
+    sys.modules['tater_anonymous_nodes'] = module
+
     @CachedAttr
     def Node(self):
         '''Circular import avoidance hack.
@@ -57,6 +66,12 @@ class LazyTypeCreator(NodeResolver):
         from tater.base.node import Node
         return Node
 
+    @CachedAttr
+    def module(self):
+        return sys.modules[self.Node.__class__.__module__]
+
     def resolve(self, name):
         logger.debug('Automatically creating undefined class %r.' % name)
-        return type(name, (self.Node,), {})
+        cls = type(name, (self.Node,), {})
+        setattr(self.module, name, cls)
+        return cls
