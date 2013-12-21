@@ -19,8 +19,8 @@ class Node2(Node):
 
 class TestTokentypeSequence(TestCase):
 
-    items = [
+    tokens = [
         (1, 2, 'A'), (2, 3, 'B'), (3, 4, 'C'),
         (3, 4, 'D'), (3, 4, 'E')]
     def test_sequence(self):
-        x = Node1.parse(self.items)
+        x = Node1.parse(self.tokens)
