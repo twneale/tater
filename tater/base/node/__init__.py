@@ -104,8 +104,10 @@ class BaseNode(object):
         LazyImportResolver,
         LazyTypeCreator)
 
-    def __init__(self, *items):
+    def __init__(self, *items, **local_ctx):
         self.items = list(items)
+        if local_ctx:
+            self.local_ctx.update(**local_ctx)
         self.children = []
 
     def __repr__(self):
@@ -160,31 +162,18 @@ class BaseNode(object):
     def ctx(self):
         '''For values that are accessible to children
         and inherit from parents.
+
+        Construction is lazy to avoid creating a chainmap
+        for every node where it's an unused feature.
         '''
-        try:
-            return self._ctx
-        except AttributeError:
-            pass
+        return ChainMap(inst=self)
 
-        if hasattr(self, 'parent'):
-            ctx = self.parent.ctx.new_child()
-        else:
-            ctx = ChainMap()
-        self._ctx = ctx
-        return ctx
-
-    @property
+    @CachedAttr
     def local_ctx(self):
         '''For values that won't be accessible to
         chidlren and don't inhreit from parents.
         '''
-        try:
-            return self._local_ctx
-        except AttributeError:
-            pass
-        _local_ctx = {}
-        self._local_ctx = _local_ctx
-        return _local_ctx
+        return {}
 
     @property
     def uuid(self):
@@ -243,7 +232,6 @@ class BaseNode(object):
             child.parent = self
             self.children.append(child)
             # Make child ctx lookups fail over to parent.
-            self.ctx.adopt(child.ctx)
             if edge is not None:
                 self.edge_map[edge] = child
         return child
@@ -252,7 +240,6 @@ class BaseNode(object):
         '''Insert a child node a specific index.
         '''
         child.parent = self
-        self.ctx.adopt(child.ctx)
         self.children.insert(index, child)
         return child
 
