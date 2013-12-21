@@ -2,7 +2,8 @@ import functools
 import re
 import uuid
 import inspect
-from collections import defaultdict
+from abc import ABCMeta
+from collections import defaultdict, MutableMapping
 
 from tater.core.tokentype import Token
 
@@ -18,7 +19,7 @@ from tater.base.node.resolvers import (
 from tater.base.node.exceptions import ConfigurationError, ParseError
 
 
-class _NodeMeta(type):
+class _NodeMeta(ABCMeta):
 
     @classmethod
     def get_base_attrs(meta, bases):
@@ -98,7 +99,19 @@ class _NodeMeta(type):
         return cls
 
 
-class BaseNode(object):
+class BaseNode(MutableMapping):
+    '''Most important thing to note about this class: __getitem__
+    accesses the instances local_ctx dictionary, while __iter__
+    iterates over the node's children. This is a definite point
+    that needs to be resolved. Is the node listy or dicty? In
+    networkx and py2neo, nodes are dicty. Mixing the two here
+    poops all over the principle of least surprise.
+
+    For this reason, self.items should probably be renamed to self.tokens,
+    among other changes.
+
+    Maybe something like this: http://stackoverflow.com/questions/3387691/python-how-to-perfectly-override-a-dict
+    '''
     __metaclass__ = _NodeMeta
 
     noderef_resolvers = (
@@ -107,23 +120,87 @@ class BaseNode(object):
         LazyTypeCreator)
 
     def __init__(self, *items, **local_ctx):
-        self.items = list(items)
+        self.tokens = list(items)
         if local_ctx:
             self.local_ctx.update(**local_ctx)
         self.children = []
 
-    def __repr__(self):
-        return '%s(%r)' % (self.__class__.__name__, self.items,)
+    # -----------------------------------------------------------------------
+    # Implement a dict interface that defers to self.local_ctx
+    # -----------------------------------------------------------------------
+    def __getitem__(self, key):
+        return self.local_ctx[key]
+
+    def __setitem__(self, key, value):
+        self.local_ctx[key] = value
+
+    def __delitem__(self, key):
+        del self.local_ctx[key]
 
     def __iter__(self):
-        return iter(self.children)
+        return iter(self.local_ctx)
 
-    def getroot(self):
-        this = self
-        while hasattr(this, 'parent'):
-            this = this.parent
-        return this
+    def __len__(self):
+        return len(self.local_ctx)
 
+    def __repr__(self):
+        return '%s(%r)' % (self.__class__.__name__, self.tokens,)
+
+    # -----------------------------------------------------------------------
+    # Other custom behavior.
+    # -----------------------------------------------------------------------
+    def __eq__(self, other):
+        if self.__class__ is not other.__class__:
+            return False
+
+        # Don't care if the tokens are a list or tuple.
+        if tuple(self.tokens) != tuple(other.tokens):
+            return False
+
+        if self.children != other.children:
+            return False
+
+        if self.ctx != other.ctx:
+            return False
+
+        return True
+
+    def __hash__(self):
+        '''This is pretty bad.
+        '''
+        return hash(self.uuid)
+
+    # -----------------------------------------------------------------------
+    # Methods related to instance state.
+    # -----------------------------------------------------------------------
+    @CachedAttr
+    def ctx(self):
+        '''For values that are accessible to children
+        and inherit from parents.
+
+        Construction is lazy to avoid creating a chainmap
+        for every node where it's an unused feature.
+        '''
+        return ChainMap(inst=self)
+
+    @CachedAttr
+    def local_ctx(self):
+        '''For values that won't be accessible to
+        chidlren and don't inhreit from parents.
+        '''
+        return {}
+
+    @property
+    def uuid(self):
+        if 'uuid' in self.local_ctx:
+            return self.local_ctx['uuid']
+        _id = str(uuid.uuid4())
+        self.local_ctx['uuid'] = _id
+        return _id
+
+    # -----------------------------------------------------------------------
+    # Dispatch and parsing methods.
+    # -----------------------------------------------------------------------
     @memoize_methodcalls
     def resolve_noderef(self, ref):
         '''Given a string, resolve it to a class definition. The
@@ -159,47 +236,6 @@ class BaseNode(object):
             i = itemstream.i
             stream = list(itemstream._stream)[i:i+10]
             raise ParseError(msg % (self, stream))
-
-    @CachedAttr
-    def ctx(self):
-        '''For values that are accessible to children
-        and inherit from parents.
-
-        Construction is lazy to avoid creating a chainmap
-        for every node where it's an unused feature.
-        '''
-        return ChainMap(inst=self)
-
-    @CachedAttr
-    def local_ctx(self):
-        '''For values that won't be accessible to
-        chidlren and don't inhreit from parents.
-        '''
-        return {}
-
-    @property
-    def uuid(self):
-        if 'uuid' in self.local_ctx:
-            return self.local_ctx['uuid']
-        _id = str(uuid.uuid4())
-        self.local_ctx['uuid'] = _id
-        return _id
-
-    def __eq__(self, other):
-        if self.__class__ is not other.__class__:
-            return False
-
-        # Don't care if the items are a list or tuple.
-        if tuple(self.items) != tuple(other.items):
-            return False
-
-        if self.children != other.children:
-            return False
-
-        if self.ctx != other.ctx:
-            return False
-
-        return True
 
     @classmethod
     def parse(cls_or_inst, itemiter, **options):
@@ -344,18 +380,18 @@ class BaseNode(object):
         return self.parent
 
     def extend(self, *items):
-        self.items.extend(items)
+        self.tokens.extend(items)
         return self
 
     def first(self):
-        return self.items[0]
+        return self.tokens[0]
 
     def first_token(self):
-        return self.items[0].token
+        return self.tokens[0].token
 
     def first_text(self):
-        if self.items:
-            return self.items[0].text
+        if self.tokens:
+            return self.tokens[0].text
         else:
             # XXX: such crap
             return ''
@@ -375,6 +411,12 @@ class BaseNode(object):
     #------------------------------------------------------------------------
     # Querying methods.
     #------------------------------------------------------------------------
+    def getroot(self):
+        this = self
+        while hasattr(this, 'parent'):
+            this = this.parent
+        return this
+
     def _depth_first(self):
         yield self
         for child in self.children:
@@ -439,11 +481,11 @@ class BaseNode(object):
     #------------------------------------------------------------------------
     def as_data(self):
         items = []
-        for (pos, token, text) in self.items:
+        for (pos, token, text) in self.tokens:
             items.append((pos, token.as_json(), text))
         return dict(
             type=self.__class__.__name__,
-            items=items,
+            tokens=items,
             children=[child.as_data() for child in self.children],
             ctx=self.ctx.map,
             local_ctx=self.local_ctx)
@@ -459,6 +501,8 @@ class BaseNode(object):
         if namespace is None:
             class NameSpace(dict):
                 def __missing__(self, cls_name):
+                    # This can probably be replaced by recent code to gerenate
+                    # ananymous types.
                     cls = type(str(cls_name), (Node,), {})
                     self[cls_name] = cls
                     return cls
@@ -466,7 +510,7 @@ class BaseNode(object):
 
         node_cls = namespace[data['type']]
         items = []
-        for pos, token, text in data['items']:
+        for pos, token, text in data['tokens']:
             items.append((pos, Token.fromstring(token), text))
         node = node_cls(*items)
         children = []
