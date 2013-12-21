@@ -1,3 +1,5 @@
+import functools
+import re
 import uuid
 import inspect
 from collections import defaultdict
@@ -489,3 +491,24 @@ def new_basenode():
 
 
 Node = new_basenode()
+
+
+def convert_etree(
+    el, node=None, node_cls=None,
+    tagsub=functools.partial(re.sub, r'\{.+?\}', '')):
+    '''Convert the element tree to a tater tree.
+    '''
+    node_cls = node_cls or Node
+    node = node or node_cls()
+    tag = tagsub(el.tag)
+    attrib = dict((tagsub(k), v) for (k, v) in el.attrib.items())
+    node.local_ctx.update(attrib, tag=tag)
+
+    if el.text:
+        node.local_ctx['text'] = el.text
+    for child in el:
+        child = convert_etree(child, node_cls=node_cls)
+        node.append(child)
+    if el.tail:
+        node.local_ctx['tail'] = el.tail
+    return node
