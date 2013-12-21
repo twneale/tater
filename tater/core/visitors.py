@@ -1,3 +1,7 @@
+import re
+import functools
+
+from tater import Node
 from tater.base.visitor import Visitor
 
 
@@ -166,6 +170,26 @@ class XmlEtreeVisitor(Visitor):
     def get_children(self, el):
         return tuple(el)
 
+    @staticmethod
+    def convert_etree(
+        el, node=None, node_cls=None,
+        tagsub=functools.partial(re.sub, r'\{.+?\}', '')):
+        '''Convert the element tree to a tater tree.
+        '''
+        node_cls = node_cls or None
+        node = node or node_cls()
+        tag = tagsub(el.tag)
+        attrib = dict((tagsub(k), v) for (k, v) in el.attrib.items())
+        node.local_ctx.update(attrib, tag=tag)
+
+        if el.text:
+            node.local_ctx['text'] = el.text
+        for child in el:
+            child = convert_etree(child)
+            node.append(child)
+        if el.tail:
+            node.local_ctx['tail'] = el.tail
+        return node
 
 # ---------------------------------------------------------------------------
 # Helpers for figuring out the start/end indexes of a parse tree.
