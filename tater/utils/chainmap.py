@@ -20,7 +20,7 @@ class ChainMap(MutableMapping):
     def __init__(self, inst=None):
         'Create a new root context'
         self.map = {}
-        if inst:
+        if inst is not None:
             self._inst = inst
 
     def __get__(self, inst, _type=None):
