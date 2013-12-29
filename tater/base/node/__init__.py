@@ -380,7 +380,7 @@ class BaseNode(dict):
             to_data=_children_to_data),
         )
 
-    def as_data(self):
+    def to_data(self):
         '''Render out this object as a json-serializable dictionary.
         '''
         data = dict(local_ctx=dict(self))
