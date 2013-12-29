@@ -137,12 +137,6 @@ class BaseNode(dict):
 
         return True
 
-    def __hash__(self):
-        '''This is pretty bad. These objects are mutable and shouldn't be
-        hashable.
-        '''
-        return hash(self.uuid)
-
     # -----------------------------------------------------------------------
     # Methods related to instance state.
     # -----------------------------------------------------------------------
