@@ -98,7 +98,7 @@ class _NodeMeta(ABCMeta):
         return cls
 
 
-class BaseNode(MutableMapping):
+class BaseNode(dict):
     '''
     '''
     __metaclass__ = _NodeMeta
@@ -108,35 +108,13 @@ class BaseNode(MutableMapping):
         LazyImportResolver,
         LazyTypeCreator)
 
-    def __init__(self, *items, **local_ctx):
-        self.tokens = list(items)
-        if local_ctx:
-            self.local_ctx.update(**local_ctx)
-        self.children = []
+    @CachedAttr
+    def tokens(self):
+        return []
 
-    # -----------------------------------------------------------------------
-    # Implement a dict interface that defers to self.local_ctx
-    # -----------------------------------------------------------------------
-    def __getitem__(self, key):
-        return self.local_ctx[key]
-
-    def __setitem__(self, key, value):
-        self.local_ctx[key] = value
-
-    def __delitem__(self, key):
-        del self.local_ctx[key]
-
-    def __iter__(self):
-        return iter(self.local_ctx)
-
-    def __len__(self):
-        return len(self.local_ctx)
-
-    def __repr__(self):
-        return '%s(%r)' % (self.__class__.__name__, self.tokens,)
-
-    def pop(self, *args):
-        return self.local_ctx.pop(*args)
+    @CachedAttr
+    def children(self):
+        return []
 
     def popitem(self):
         return self.local_ctx.popitem(key)
