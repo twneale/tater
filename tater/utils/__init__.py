@@ -121,3 +121,112 @@ def memoize_methodcalls(func, dumps=cPickle.dumps):
             cache[args] = func(self, *args, **kwargs)
         return cache[args]
     return memoizer
+
+
+class IteratorWrapperBase(object):
+
+    def __init__(self, iterator):
+        self.iterator = iterator
+        self.counter = 0
+
+    def __iter__(self):
+        while True:
+            try:
+                yield self.next()
+            except StopIteration:
+                return
+
+    def next(self):
+        return next(self.iterator)
+
+
+class ListIteratorBase(list):
+
+    def __init__(self, listy):
+        self.listy = listy
+        self.counter = 0
+
+    def __iter__(self):
+        while True:
+            try:
+                yield self.next()
+            except StopIteration:
+                return
+
+    def next(self):
+        try:
+            val = self.listy[self.counter]
+        except IndexError:
+            raise StopIteration()
+        try:
+            return val
+        finally:
+            self.counter += 1
+
+
+class LoopInterface(ListIteratorBase):
+    '''A listy context manager wrapper that enables things like:
+
+    listy = ['A', 'B', 'C']
+    >>> with LoopInterface(listy) as loop:
+    ... for thing in loop:
+    ...     if loop.first:
+    ...         pass
+    ...     elif loop.last:
+    ...         print ', and',
+    ...     else:
+    ...         print ',',
+    ...     print thing, "(%s)" % loop.counter,
+    ...     if loop.last:
+    ...         print '.'
+    >>> A (1) , B (2) , and C (3) .
+    '''
+    def __enter__(self):
+        return self
+
+    @property
+    def first(self):
+        return self.counter == 1
+
+    @property
+    def last(self):
+        return self.counter == len(self.listy)
+
+    @property
+    def counter0(self):
+        '''0-based loop counter.
+        '''
+        return self.counter - 1
+
+
+class DictFilterMixin(object):
+    '''
+    listy = [dict(a=1), dict(a=2), dict(a=3)]
+    for dicty in DictFilter(listy).filter(a=1):
+        print dicty
+
+    @dict_filter
+    def
+    '''
+    def filter(self, **kwargs):
+        '''Assumes all the dict's items are hashable.
+        '''
+        filter_items = set(kwargs.items())
+        for dicty in self:
+            dicty_items = set(dicty.items())
+            if filter_items.issubset(dicty_items):
+                yield dicty
+
+
+class IteratorDictFilter(IteratorWrapperBase, DictFilterMixin):
+    '''A dict filter that wraps an iterator.
+    '''
+    pass
+
+
+def iterdict_filter(f):
+    @functools.wraps(f)
+    def wrapped(*args, **kwargs):
+        result = f(*args, **kwargs)
+        return IteratorDictFilter(result)
+    return wrapped

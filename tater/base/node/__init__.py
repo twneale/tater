@@ -1,6 +1,7 @@
 import re
 import uuid
 import inspect
+import operator
 from abc import ABCMeta
 from collections import defaultdict, MutableMapping
 
@@ -8,7 +9,8 @@ from tater.core.tokentype import Token
 
 from tater.utils import (
         CachedAttr, CachedClassAttribute, NoClobberDict,
-        KeyClobberError, memoize_methodcalls)
+        KeyClobberError, memoize_methodcalls, LoopInterface,
+        iterdict_filter, DictFilterMixin)
 from tater.utils.chainmap import ChainMap
 from tater.utils.itemstream import ItemStream
 
@@ -18,7 +20,31 @@ from tater.base.node.resolvers import (
 from tater.base.node.exceptions import ConfigurationError, ParseError
 
 
-class _NodeMeta(ABCMeta):
+class NodeList(list, DictFilterMixin):
+    '''A list subclass that exposes a LoopInterface when
+    invoked as a context manager, and can also be iterated
+    over in sorted order, given a dict key.
+
+    with node.children.sorted_by('rank') as loop:
+        for thing in loop.filter(disqualified=False):
+            if loop.first:
+                print thing, 'is first!'
+            else:
+                print thing, 'is the %dth loser' % loop.counter
+    '''
+    def __enter__(self):
+        return LoopInterface(self)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        pass
+
+    def sort_by(self, itemkey):
+        '''Sort kids by the specified dictionary key.
+        '''
+        return self.__class__(sorted(self, key=operator.itemgetter(attr)))
+
+
+class _NodeMeta(type):
 
     @classmethod
     def get_base_attrs(meta, bases):
@@ -99,43 +125,50 @@ class _NodeMeta(ABCMeta):
 
 
 class BaseNode(dict):
-    '''
+    '''A basic directed graph node optimized for mutability and
+    contextual analysis.
+
+    This node class differs from Networkx nodes, which are essentially
+    a dictionary-based abstraction optimized for O(1) node lookup.
     '''
     __metaclass__ = _NodeMeta
 
+    # The groups of resolvers attempted (in order) for resolving
+    # stringy node references.
     noderef_resolvers = (
         MetaclassRegistryResolver,
         LazyImportResolver,
         LazyTypeCreator)
 
     @CachedAttr
-    def tokens(self):
-        return []
-
-    @CachedAttr
     def children(self):
-        return []
+        return NodeList()
 
+    # -----------------------------------------------------------------------
+    # Custom __eq__ behavior.
+    # -----------------------------------------------------------------------
     eq_attrs = ('children',)
-    eq_attrs = ('children', 'tokens', '__class__.__name__')
 
-    # -----------------------------------------------------------------------
-    # Other custom behavior.
-    # -----------------------------------------------------------------------
     @CachedClassAttribute
     def _eq_attrgetters(self):
+        '''Functions that quickly get the attrs marked for
+        consideration in determining equality on the class.
+        '''
         return map(operator.attrgetter, self.eq_attrs)
 
     def __eq__(self, other):
-
-        if not super(BaseNode, self).__eq__(self, other):
+        '''Defers to dict.__eq__, then compares attrs specified
+        by subclasses.
+        '''
+        if not super(BaseNode, self).__eq__(other):
             return False
-
         for getter in self._eq_attrgetters:
             if not getter(self) == getter(other):
                 return False
-
         return True
+
+    def __repr__(self):
+        return '%s(%s)' % (self.__class__.__name__, dict.__repr__(self))
 
     # -----------------------------------------------------------------------
     # Methods related to instance state.
@@ -147,19 +180,13 @@ class BaseNode(dict):
 
         Construction is lazy to avoid creating a chainmap
         for every node where it's an unused feature.
+
+        Should be used primarily for contextually specific ephemera
+        needed for graph traversal, rendering, and mutation.
+
+        Doesn't get serialized.
         '''
         return ChainMap(inst=self)
-
-    @CachedAttr
-    def local_ctx(self):
-        '''For values that won't be accessible to
-        chidlren and don't inhreit from parents.
-        '''
-        return {}
-
-    @CachedAttr
-    def uuid(self):
-        return str(uuid.uuid4())
 
     # -----------------------------------------------------------------------
     # Dispatch and parsing methods.
@@ -174,57 +201,10 @@ class BaseNode(dict):
             return self.nodespace.resolve(ref)
         return ref
 
-    def resolve(self, itemstream):
-        '''Try to resolve the incoming stream against the functions
-        defined on the class instance.
-        '''
-        for dispatcher, dispatch_data in self._dispatch_data.items():
-            match = dispatcher.dispatch(itemstream, dispatch_data)
-            if match is None:
-                continue
-            method, matched_items = match
-            if method is not None:
-                return method(self, *matched_items)
-
-        # Itemstream is exhausted.
-        if not itemstream:
-            raise StopIteration()
-
-        # Propagate up this node's parent.
-        parent = getattr(self, 'parent', None)
-        if parent is not None:
-            return parent.resolve(itemstream)
-        else:
-            msg = 'No function defined on %r for %s ...'
-            i = itemstream.i
-            stream = list(itemstream._stream)[i:i+10]
-            raise ParseError(msg % (self, stream))
-
-    @classmethod
-    def parse(cls_or_inst, itemiter, **options):
-        '''Supply a user-defined start class.
-        '''
-        itemstream = ItemStream(itemiter)
-
-        if callable(cls_or_inst):
-            node = cls_or_inst()
-        else:
-            node = cls_or_inst
-
-        while 1:
-            try:
-                if options.get('debug'):
-                    print '%r <-- %r' % (node, itemstream)
-                    node.getroot().pprint()
-                node = node.resolve(itemstream)
-            except StopIteration:
-                break
-        return node.getroot()
-
     # -----------------------------------------------------------------------
     # Low-level mutation methods. String references to types not allowed.
     # -----------------------------------------------------------------------
-    def append(self, child, related=True, edge=None):
+    def append(self, child, related=True):
         '''Related is false when you don't want the child to become
         part of the resulting data structure, as in the case of the
         start node.
@@ -232,9 +212,6 @@ class BaseNode(dict):
         if related:
             child.parent = self
             self.children.append(child)
-            # Make child ctx lookups fail over to parent.
-            if edge is not None:
-                self.edge_map[edge] = child
         return child
 
     def insert(self, index, child):
@@ -265,100 +242,46 @@ class BaseNode(dict):
     # -----------------------------------------------------------------------
     # High-level mutation methods. String references to types allowed.
     # -----------------------------------------------------------------------
-    def ascend(self, cls_or_name, items=None, related=True):
+    def ascend(self, cls_or_name=None, related=True, *args, **kwargs):
         '''Create a new parent node. Set it as the
         parent of this node. Return the parent.
         '''
+        cls_or_name = cls_or_name or self.__class__.__name__
         cls = self.resolve_noderef(cls_or_name)
-        items = items or []
-        parent = cls_or_name(*items)
+        parent = cls_or_name(*args, **kwargs)
         parent.append(self, related)
         return parent
 
-    def descend(self, cls_or_name, items=None):
+    def descend(self, cls_or_name=None, *args, **kwargs):
+        '''Create a new node, set it as a child of this node and return it.
+        '''
+        cls_or_name = cls_or_name or self.__class__.__name__
         cls = self.resolve_noderef(cls_or_name)
-        items = items or []
-
-        # Put single item into a list. This sucks.
-        if items and isinstance(items[0], int):
-            items = [items]
-
-        child = cls(*items)
+        child = cls(*args, **kwargs)
         return self.append(child)
 
-    def descend_many(self, *cls_or_name_seq):
+    def descend_path(self, *cls_or_name_seq):
+        '''Descend along the specifed path.
+        '''
         this = self
         for cls_or_name in cls_or_name_seq:
-            cls = self.resolve_noderef(cls_or_name)
-            child = cls()
-            this = this.append(child)
+            this = this.descend(cls_or_name)
         return this
 
-    def swap(self, cls_or_name, items=None):
-        '''Swap cls(*items) for this node and make this node
+    def swap(self, cls_or_name=None, *args, **kwargs):
+        '''Swap cls(*args, **kwargs) for this node and make this node
         it's child.
         '''
+        cls_or_name = cls_or_name or self.__class__.__name__
         cls = self.resolve_noderef(cls_or_name)
-        items = items or []
-        new_parent = self.parent.descend(cls, items)
+        new_parent = self.parent.descend(cls, *args, **kwargs)
         self.parent.remove(self)
         new_parent.append(self)
         return new_parent
 
-    def replace(self, cls_or_node_or_name, items=None, transfer=False):
-        '''Replace this node wholesale with the specified child.
-        Preserve order.
-        '''
-        if isinstance(cls_or_node_or_name, basestring):
-            cls = self.resolve_noderef(cls_or_node_or_name)
-        items = items or []
-        parent = self.parent
-        children = parent.children
-        index = children.index(self)
-
-        # Remove this node.
-        children.remove(self)
-
-        if isinstance(cls_or_node_or_name, Node):
-            # If a node was passed in, insert it.
-            new_node = cls_or_node_or_name
-        else:
-            # Otherwise create a new node.
-            cls = cls_or_node_or_name
-            new_node = cls(*items)
-            new_node.ctx = self.ctx
-            new_node.local_ctx = self.local_ctx
-
-        if transfer:
-            new_node.children.extend(self.children)
-
-        return parent.insert(index, new_node)
-
     # -----------------------------------------------------------------------
     # Readability functions.
     # -----------------------------------------------------------------------
-    def popstate(self):
-        '''Just for readability and clarity about what it means
-        to return the parent.'''
-        return self.parent
-
-    def extend(self, *items):
-        self.tokens.extend(items)
-        return self
-
-    def first(self):
-        return self.tokens[0]
-
-    def first_token(self):
-        return self.tokens[0].token
-
-    def first_text(self):
-        if self.tokens:
-            return self.tokens[0].text
-        else:
-            # XXX: such crap
-            return ''
-
     def pprint(self, offset=0):
         print offset * ' ', '-', self
         for child in self.children:
@@ -423,36 +346,210 @@ class BaseNode(dict):
                 yield parent
             this = parent
 
-    def find(self, type_or_name):
-        if isinstance(type_or_name, basestring):
-            for node in self._depth_first():
-                if node.__class__.__name__ == type_or_name:
-                    yield node
-        else:
-            for node in self._depth_first():
-                if isinstance(node, type_or_name):
-                    yield node
+    def get_nodekey(self):
+        '''This method enables subclasses to customize the
+        behavior of ``find`` and ``find_one``. The default
+        implementation uses the name of the class.
+        '''
+        return self.__class__.__name__
 
-    def find_one(self, type_):
+    @iterdict_filter
+    def find(self, nodekey):
+        '''Nodekey must be a string.
+        '''
+        for node in self._depth_first():
+            if node.get_nodekey() == nodekey:
+                yield node
+
+    def find_one(self, nodekey):
         '''Find the only child matching the criteria.
         '''
-        for node in self.find(type_):
+        for node in self.find(nodekey):
             return node
 
     #------------------------------------------------------------------------
     # Serialization methods.
     #------------------------------------------------------------------------
-    def as_data(self):
-        items = []
-        for (pos, token, text) in self.tokens:
-            items.append((pos, token.as_json(), text))
-        return dict(
-            type=self.__class__.__name__,
-            tokens=items,
-            children=[child.as_data() for child in self.children],
-            ctx=self.ctx.map,
-            local_ctx=self.local_ctx)
+    def _children_to_data(children):
+        return [kid.to_data() for kid in children]
 
+    _serialization_meta = (
+        dict(attr='__class__.__name__', alias='type'),
+        dict(
+            attr='children',
+            to_data=_children_to_data),
+        )
+
+    def as_data(self):
+        '''Render out this object as a json-serializable dictionary.
+        '''
+        data = dict(local_ctx=dict(self))
+        for meta in self._serialization_meta:
+            attr = meta['attr']
+            alias = meta.get('alias', attr)
+            to_data = meta.get('to_data')
+            value = operator.attrgetter(attr)(self)
+            if to_data is not None:
+                value = to_data(value)
+            data[alias] = value
+        return data
+
+    @classmethod
+    def fromdata(cls, data):
+        '''
+        '''
+        # Create a new node.
+        nodespace = cls.nodespace
+        node_cls = nodespace.resolve(data['type'])
+        node = node_cls(data['local_ctx'])
+
+        # Add the children.
+        children = []
+        for child in data['children']:
+            child = cls.fromdata(child, namespace)
+            node.append(child)
+
+        # Add any other attrs marked for inclusion by the class def.
+        for meta in cls._serialization_meta:
+            meta = dict(meta)
+            if meta.get('alias') == 'type':
+                continue
+            if meta['attr'] == 'children':
+                continue
+            fromdata = meta.get('fromdata')
+
+            attr = meta['attr']
+            alias = meta.get('alias', attr)
+            val = data[alias]
+            if fromdata is not None:
+                val = fromdata(val)
+            object.__setattr__(node, attr, val)
+
+        return node
+
+    #------------------------------------------------------------------------
+    # Random utils.
+    #------------------------------------------------------------------------
+    @CachedAttr
+    def uuid(self):
+        '''Just a convenience for quickly generating uuid4's. The built-in
+        ``id`` function is probably more idiomatic for most purposes.
+        '''
+        return str(uuid.uuid4())
+
+
+class BaseSyntaxNode(BaseNode):
+
+    eq_attrs = ('children', 'tokens', '__class__.__name__',)
+
+    @CachedAttr
+    def tokens(self):
+        return []
+
+    #------------------------------------------------------------------------
+    # Parsing and dispatch methods.
+    #------------------------------------------------------------------------
+    def popstate(self):
+        '''Just for readability and clarity about what it means
+        to return the parent.'''
+        return self.parent
+
+    def resolve(self, itemstream):
+        '''Try to resolve the incoming stream against the functions
+        defined on the class instance.
+        '''
+        for dispatcher, dispatch_data in self._dispatch_data.items():
+            match = dispatcher.dispatch(itemstream, dispatch_data)
+            if match is None:
+                continue
+            method, matched_items = match
+            if method is not None:
+                return method(self, *matched_items)
+
+        # Itemstream is exhausted.
+        if not itemstream:
+            raise StopIteration()
+
+        # Propagate up this node's parent.
+        parent = getattr(self, 'parent', None)
+        if parent is not None:
+            return parent.resolve(itemstream)
+        else:
+            msg = 'No function defined on %r for %s ...'
+            i = itemstream.i
+            stream = list(itemstream._stream)[i:i+10]
+            raise ParseError(msg % (self, stream))
+
+    @classmethod
+    def parse(cls_or_inst, itemiter, **options):
+        '''Supply a user-defined start class.
+        '''
+        itemstream = ItemStream(itemiter)
+
+        if callable(cls_or_inst):
+            node = cls_or_inst()
+        else:
+            node = cls_or_inst
+
+        while 1:
+            try:
+                if options.get('debug'):
+                    print '%r <-- %r' % (node, itemstream)
+                    node.getroot().pprint()
+                node = node.resolve(itemstream)
+            except StopIteration:
+                break
+        return node.getroot()
+
+    # -----------------------------------------------------------------------
+    # Readability functions.
+    # -----------------------------------------------------------------------
+    def extend(self, *items):
+        self.tokens.extend(items)
+        return self
+
+    def first(self):
+        return self.tokens[0]
+
+    def first_token(self):
+        return self.tokens[0].token
+
+    def first_text(self):
+        if self.tokens:
+            return self.tokens[0].text
+        else:
+            # XXX: such crap
+            return ''
+
+
+    #------------------------------------------------------------------------
+    # Serialization methods.
+    #------------------------------------------------------------------------
+    @staticmethod
+    def _tokens_as_data(self, tokens):
+        _tokens = []
+        for (pos, token, text) in tokens:
+            _tokens.append((pos, token.as_json(), text))
+        return tokens
+
+    def _tokens_from_data(self, tokens):
+        _tokens = []
+        for pos, token, text in tokens:
+            _tokens.append((pos, Token.fromstring(token), text))
+        return _tokens
+
+    as_data_attrs = (
+        dict(attr='__class__.__name__', alias='type'),
+        dict(attr='children'),
+        dict(
+            attr='tokens',
+            to_data=_tokens_as_data,
+            fromdata=_tokens_from_data),
+        )
+
+    #------------------------------------------------------------------------
+    # Serialization methods.
+    #------------------------------------------------------------------------
     @classmethod
     def fromdata(cls, data, namespace=None):
         '''
@@ -489,14 +586,15 @@ class BaseNode(dict):
         return node
 
 
-def new_basenode():
+def new_basenode(*bases):
     '''Create a new base node type with its own distinct nodespace.
     This provides a way to reuse node names without name conflicts in the
     metaclass cache.
     '''
-    return type('Node', (BaseNode,), dict(nodespace=NodeSpace()))
+    return type('Node', bases, dict(nodespace=NodeSpace()))
 
 
-Node = new_basenode()
+Node = new_basenode(BaseNode)
+SyntaxNode = new_basenode(BaseSyntaxNode)
 
 
