@@ -89,6 +89,7 @@ class NoClobberDict(dict):
     '''An otherwise ordinary dict that complains if you
     try to overwrite any existing keys.
     '''
+    KeyClobberError = KeyClobberError
     def __setitem__(self, key, val):
         if key in self:
             msg = "Can't overwrite key %r in %r"
@@ -99,14 +100,15 @@ class NoClobberDict(dict):
     def update(self, otherdict=None, **kwargs):
         if otherdict is not None:
             dupes = set(otherdict) & set(self)
-            if dupes:
-                msg = "Can't overwrite keys %r in %r"
-                raise KeyClobberError(msg % (dupes, self))
+            for dupe in dupes:
+                if self[dupe] != otherdict[dupe]:
+                    msg = "Can't overwrite keys %r in %r"
+                    raise KeyClobberError(msg % (dupes, self))
         if kwargs:
-            dupes = set(kwargs) & set(self)
-            if dupes:
-                msg = "Can't overwrite keys %r in %r"
-                raise KeyClobberError(msg % (dupes, self))
+            for dupe in dupes:
+                if self[dupe] != otherdict[dupe]:
+                    msg = "Can't overwrite keys %r in %r"
+                    raise KeyClobberError(msg % (dupes, self))
         dict.update(self, otherdict or {}, **kwargs)
 
 

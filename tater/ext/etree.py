@@ -62,13 +62,13 @@ def from_etree(
     node = node or node_cls()
     tag = tagsub(el.tag)
     attrib = dict((tagsub(k), v) for (k, v) in el.attrib.items())
-    node.local_ctx.update(attrib, tag=tag)
+    node.update(attrib, tag=tag)
 
     if el.text:
-        node.local_ctx['text'] = el.text
+        node['text'] = el.text
     for child in el:
         child = from_etree(child, node_cls=node_cls)
         node.append(child)
     if el.tail:
-        node.local_ctx['tail'] = el.tail
+        node['tail'] = el.tail
     return node
