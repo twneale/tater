@@ -1,4 +1,3 @@
-import functools
 import re
 import uuid
 import inspect
@@ -100,17 +99,7 @@ class _NodeMeta(ABCMeta):
 
 
 class BaseNode(MutableMapping):
-    '''Most important thing to note about this class: __getitem__
-    accesses the instances local_ctx dictionary, while __iter__
-    iterates over the node's children. This is a definite point
-    that needs to be resolved. Is the node listy or dicty? In
-    networkx and py2neo, nodes are dicty. Mixing the two here
-    poops all over the principle of least surprise.
-
-    For this reason, self.items should probably be renamed to self.tokens,
-    among other changes.
-
-    Maybe something like this: http://stackoverflow.com/questions/3387691/python-how-to-perfectly-override-a-dict
+    '''
     '''
     __metaclass__ = _NodeMeta
 
@@ -146,6 +135,12 @@ class BaseNode(MutableMapping):
     def __repr__(self):
         return '%s(%r)' % (self.__class__.__name__, self.tokens,)
 
+    def pop(self, *args):
+        return self.local_ctx.pop(*args)
+
+    def popitem(self):
+        return self.local_ctx.popitem(key)
+
     # -----------------------------------------------------------------------
     # Other custom behavior.
     # -----------------------------------------------------------------------
@@ -160,13 +155,14 @@ class BaseNode(MutableMapping):
         if self.children != other.children:
             return False
 
-        if self.ctx != other.ctx:
+        if self.local_ctx != other.local_ctx:
             return False
 
         return True
 
     def __hash__(self):
-        '''This is pretty bad.
+        '''This is pretty bad. These objects are mutable and shouldn't be
+        hashable.
         '''
         return hash(self.uuid)
 
@@ -190,13 +186,9 @@ class BaseNode(MutableMapping):
         '''
         return {}
 
-    @property
+    @CachedAttr
     def uuid(self):
-        if 'uuid' in self.local_ctx:
-            return self.local_ctx['uuid']
-        _id = str(uuid.uuid4())
-        self.local_ctx['uuid'] = _id
-        return _id
+        return str(uuid.uuid4())
 
     # -----------------------------------------------------------------------
     # Dispatch and parsing methods.
@@ -374,7 +366,7 @@ class BaseNode(MutableMapping):
     # -----------------------------------------------------------------------
     # Readability functions.
     # -----------------------------------------------------------------------
-    def pop(self):
+    def popstate(self):
         '''Just for readability and clarity about what it means
         to return the parent.'''
         return self.parent
@@ -537,22 +529,3 @@ def new_basenode():
 Node = new_basenode()
 
 
-def convert_etree(
-    el, node=None, node_cls=None,
-    tagsub=functools.partial(re.sub, r'\{.+?\}', '')):
-    '''Convert the element tree to a tater tree.
-    '''
-    node_cls = node_cls or Node
-    node = node or node_cls()
-    tag = tagsub(el.tag)
-    attrib = dict((tagsub(k), v) for (k, v) in el.attrib.items())
-    node.local_ctx.update(attrib, tag=tag)
-
-    if el.text:
-        node.local_ctx['text'] = el.text
-    for child in el:
-        child = convert_etree(child, node_cls=node_cls)
-        node.append(child)
-    if el.tail:
-        node.local_ctx['tail'] = el.tail
-    return node
