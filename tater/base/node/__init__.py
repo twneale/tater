@@ -116,25 +116,24 @@ class BaseNode(dict):
     def children(self):
         return []
 
-    def popitem(self):
-        return self.local_ctx.popitem(key)
+    eq_attrs = ('children',)
+    eq_attrs = ('children', 'tokens', '__class__.__name__')
 
     # -----------------------------------------------------------------------
     # Other custom behavior.
     # -----------------------------------------------------------------------
+    @CachedClassAttribute
+    def _eq_attrgetters(self):
+        return map(operator.attrgetter, self.eq_attrs)
+
     def __eq__(self, other):
-        if self.__class__ is not other.__class__:
+
+        if not super(BaseNode, self).__eq__(self, other):
             return False
 
-        # Don't care if the tokens are a list or tuple.
-        if tuple(self.tokens) != tuple(other.tokens):
-            return False
-
-        if self.children != other.children:
-            return False
-
-        if self.local_ctx != other.local_ctx:
-            return False
+        for getter in self._eq_attrgetters:
+            if not getter(self) == getter(other):
+                return False
 
         return True
 
