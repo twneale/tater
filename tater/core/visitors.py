@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 from tater import Node
 from tater.base.visitor import Visitor
 
@@ -66,8 +68,7 @@ class Renderer(Visitor):
         self._run_visitor_method(method, node)
 
     def _run_visitor_method(self, method, node):
-        # Test if the function is a context manager. If so, invoke it.
-        try:
+        if getattr(method, '_is_contextmanager', False):
             with method(node):
                 visit_nodes = self.visit_nodes
                 for child in self.get_children(node):
@@ -75,8 +76,16 @@ class Renderer(Visitor):
                         visit_nodes(child)
                     except self.Continue:
                         continue
-        except:
+        else:
             return method(node)
+
+
+def render(method):
+    '''Poorly named thin wrapper for context manager decorator.
+    '''
+    method = contextmanager(method)
+    method._is_contextmanager = True
+    return method
 
 
 class _Orderer(Visitor):
