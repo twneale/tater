@@ -150,33 +150,6 @@ class DiGraphVisitor(Visitor):
         return self
 
 
-class EtreeVisitor(Visitor):
-
-    def visit(self, node):
-        self.node = node
-        self.visit_nodes(node)
-        return self.finalize()
-
-    def get_children(self, node):
-        return tuple(node)
-
-    def visit_HtmlComment(self, node):
-        '''Skip comments.
-        '''
-        raise self.Continue()
-
-
-class XmlEtreeVisitor(Visitor):
-
-    def visit(self, el):
-        self.el = el
-        self.visit_nodes(el)
-        return self.finalize()
-
-    def get_children(self, el):
-        return tuple(el)
-
-
 # ---------------------------------------------------------------------------
 # Helpers for figuring out the start/end indexes of a parse tree.
 # ---------------------------------------------------------------------------
@@ -205,6 +178,7 @@ class EndIndexVisitor(IndexVisitor):
     '''This visitor finds the ending index of the right-most string
     modeled by the ast.
     '''
+
     def get_index(self):
         if self.indices:
             return max(self.indices)
