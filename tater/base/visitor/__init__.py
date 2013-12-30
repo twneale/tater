@@ -5,7 +5,7 @@ functions, causing the visitor to skip children
 and not visit them.
 '''
 from tater.utils import CachedAttr
-from tater.base.visitor.utils import MethodDict
+from tater.base.visitor.utils import MethodCache
 
 
 class Visitor(object):
@@ -19,7 +19,7 @@ class Visitor(object):
 
     @CachedAttr
     def _methods(self):
-        return MethodDict(visitor=self)
+        return MethodCache(visitor=self)
 
     def visit(self, node):
         self.node = node
@@ -37,7 +37,7 @@ class Visitor(object):
             visit_nodes(child)
 
     def visit_node(self, node):
-        func = self._methods[node]
+        func = self._methods.check(node)
         if func is not None:
             return func(node)
         else:
@@ -78,7 +78,7 @@ class IteratorVisitor(Visitor):
                 yield result
 
     def itervisit_node(self, node):
-        func = self._methods[node]
+        func = self._methods.get(node)
         if func is not None:
             return func(node)
         else:

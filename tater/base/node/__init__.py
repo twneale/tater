@@ -354,11 +354,16 @@ class BaseNode(dict):
         return self.__class__.__name__
 
     @iterdict_filter
-    def find(self, nodekey):
+    def find(self, nodekey=None):
         '''Nodekey must be a string.
         '''
         for node in self._depth_first():
-            if node.get_nodekey() == nodekey:
+            if nodekey is not None:
+                if node.get_nodekey() == nodekey:
+                    yield node
+                else:
+                    continue
+            else:
                 yield node
 
     def find_one(self, nodekey):
@@ -400,13 +405,13 @@ class BaseNode(dict):
         '''
         # Create a new node.
         nodespace = cls.nodespace
-        node_cls = nodespace.resolve(data['type'])
+        node_cls = nodespace.resolve(str(data['type']))
         node = node_cls(data['local_ctx'])
 
         # Add the children.
         children = []
         for child in data['children']:
-            child = cls.fromdata(child, namespace)
+            child = cls.fromdata(child)
             node.append(child)
 
         # Add any other attrs marked for inclusion by the class def.

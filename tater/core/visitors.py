@@ -56,7 +56,7 @@ class Renderer(Visitor):
         '''If the visitor function is a context manager, invoke it,
         otherwise just run the function.
         '''
-        method = self._methods[node]
+        method = self._methods.check(node)
 
         # If no function is defined, run the generic visit function.
         if method is None:
@@ -118,7 +118,7 @@ class OrderedRenderer(Visitor):
         '''If the visitor function is a context manager, invoke it,
         otherwise just run the function.
         '''
-        func = self._methods[node]
+        func = self._methods.check(node)
 
         # If no function is defined, run the generic visit function.
         if func is None:
