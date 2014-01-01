@@ -6,7 +6,7 @@ import functools
 
 import lxml.etree as et
 
-from tater import Visitor
+from tater import Visitor, Node
 
 
 class XmlEtreeVisitor(Visitor):
@@ -55,7 +55,8 @@ def to_etree(node):
 
 def from_etree(
     el, node=None, node_cls=None,
-    tagsub=functools.partial(re.sub, r'\{.+?\}', '')):
+    tagsub=functools.partial(re.sub, r'\{.+?\}', ''),
+    Node=Node):
     '''Convert the element tree to a tater tree.
     '''
     node_cls = node_cls or Node

@@ -38,10 +38,10 @@ class NodeList(list, DictFilterMixin):
     def __exit__(self, exc_type, exc_value, traceback):
         pass
 
-    def sort_by(self, itemkey):
+    def order_by(self, key):
         '''Sort kids by the specified dictionary key.
         '''
-        return self.__class__(sorted(self, key=operator.itemgetter(attr)))
+        return self.__class__(sorted(self, key=operator.itemgetter(key)))
 
 
 class _NodeMeta(type):
@@ -303,10 +303,10 @@ class BaseNode(dict):
             this = this.parent
         return this
 
-    def _depth_first(self):
+    def depth_first(self):
         yield self
         for child in self.children:
-            for node in child._depth_first():
+            for node in child.depth_first():
                 yield node
 
     def has_siblings(self):
@@ -357,7 +357,7 @@ class BaseNode(dict):
     def find(self, nodekey=None):
         '''Nodekey must be a string.
         '''
-        for node in self._depth_first():
+        for node in self.depth_first():
             if nodekey is not None:
                 if node.get_nodekey() == nodekey:
                     yield node
