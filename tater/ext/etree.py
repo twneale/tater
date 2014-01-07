@@ -19,6 +19,9 @@ class XmlEtreeVisitor(Visitor):
     def get_children(self, el):
         return tuple(el)
 
+    def get_nodekey(self, el):
+        return el.tag
+
 
 class HtmlEtreeVisitor(XmlEtreeVisitor):
 
