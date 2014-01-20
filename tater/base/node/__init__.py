@@ -388,7 +388,7 @@ class BaseNode(dict):
     def to_data(self):
         '''Render out this object as a json-serializable dictionary.
         '''
-        data = dict(local_ctx=dict(self))
+        data = dict(data=dict(self))
         for meta in self._serialization_meta:
             attr = meta['attr']
             alias = meta.get('alias', attr)
@@ -525,7 +525,6 @@ class BaseSyntaxNode(BaseNode):
         else:
             # XXX: such crap
             return ''
-
 
     #------------------------------------------------------------------------
     # Serialization methods.
