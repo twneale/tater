@@ -188,6 +188,9 @@ class LoopInterface(ListIteratorBase):
     def __enter__(self):
         return self
 
+    def __exit__(self, exc_type, exc_value, traceback):
+        pass
+
     @property
     def first(self):
         return self.counter == 1
