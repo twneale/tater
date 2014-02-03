@@ -127,6 +127,9 @@ def memoize_methodcalls(func, dumps=cPickle.dumps):
     return memoizer
 
 
+# -----------------------------------------------------------------------------
+# List tools.
+# -----------------------------------------------------------------------------
 class IteratorWrapperBase(object):
 
     def __init__(self, iterator):
@@ -206,6 +209,14 @@ class LoopInterface(ListIteratorBase):
         return self.counter - 1
 
 
+# -----------------------------------------------------------------------------
+# Dict filter class.
+# -----------------------------------------------------------------------------
+class NonExistentHandler(object):
+    '''Raise if someone tries a dunder query that isn't supported.
+    '''
+
+
 class DictFilterMixin(object):
     '''
     listy = [dict(a=1), dict(a=2), dict(a=3)]
@@ -218,11 +229,40 @@ class DictFilterMixin(object):
     def filter(self, **kwargs):
         '''Assumes all the dict's items are hashable.
         '''
-        filter_items = set(kwargs.items())
+        # So we don't return anything more than once.
+        yielded = set()
+
+        dunder = '__'
+        filter_items = set()
+        for k, v in kwargs.items():
+            if dunder in k:
+                k, op = k.split(dunder)
+                try:
+                    handler = getattr(self, 'handle__%s' % op)
+                except AttributeError:
+                    msg = '%s has no %r method to handle operator %r.'
+                    raise NonExistentHandler(msg % (self, handler, op))
+                for dicty in self:
+                    if handler(k, v, dicty):
+                        dicty_id = id(dicty)
+                        if dicty_id not in yielded:
+                            yield dicty
+                            yielded.add(dicty_id)
+            else:
+                filter_items.add((k, v))
+
         for dicty in self:
             dicty_items = set(dicty.items())
             if filter_items.issubset(dicty_items):
                 yield dicty
+
+    def handle__in(self, key, value, dicty):
+        dicty_val = dicty[key]
+        return dicty_val in value
+
+    def handle__ne(self, key, value, dicty):
+        dicty_val = dicty[key]
+        return dicty_val != value
 
 
 class IteratorDictFilter(IteratorWrapperBase, DictFilterMixin):
@@ -239,6 +279,9 @@ def iterdict_filter(f):
     return wrapped
 
 
+# -----------------------------------------------------------------------------
+# Dict filter class.
+# -----------------------------------------------------------------------------
 @contextlib.contextmanager
 def cd(path):
     '''Creates the path if it doesn't exist'''
