@@ -400,13 +400,23 @@ class BaseNode(dict):
         return data
 
     @classmethod
-    def fromdata(cls, data):
+    def fromdata(cls, data, default_node_cls=None):
         '''
         '''
         # Create a new node.
         nodespace = cls.nodespace
-        node_cls = nodespace.resolve(str(data['type']))
-        node = node_cls(data['local_ctx'])
+
+        # Figure out what node_cls to use.
+        if default_node_cls is None:
+            type_ = data.get('type')
+            if type_ is not None:
+                node_cls = nodespace.resolve(str(type_))
+            else:
+                node_cls = cls
+        else:
+            node_cls = default_node_cls
+
+        node = node_cls(data['data'])
 
         # Add the children.
         children = []
