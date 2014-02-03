@@ -602,6 +602,7 @@ class BaseSyntaxNode(BaseNode):
             node.ctx.update(data['ctx'])
         if 'local_ctx' in data:
             node._local_ctx = data['local_ctx']
+
         return node
 
 
