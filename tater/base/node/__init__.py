@@ -440,6 +440,11 @@ class BaseNode(dict):
                 val = fromdata(val)
             object.__setattr__(node, attr, val)
 
+        # Postdeserialize hook, just in case.
+        post_deserialize = getattr(node_cls, 'post_deserialize', None)
+        if post_deserialize is not None:
+            post_deserialize(node)
+
         return node
 
     #------------------------------------------------------------------------
