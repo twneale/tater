@@ -97,8 +97,8 @@ class _Orderer(Visitor):
         self.nodes.append(node)
 
     def _sortfunc(self, node):
-        if node.items:
-            for pos, token, text in node.items:
+        if node.tokens:
+            for pos, token, text in node.tokens:
                 return pos
 
     def finalize(self):
@@ -170,7 +170,7 @@ class StartIndexVisitor(IndexVisitor):
             return min(self.indices)
 
     def generic_visit(self, node):
-        for pos, token, text in node.items:
+        for pos, token, text in node.tokens:
             self.indices.append(pos)
 
 
@@ -187,7 +187,7 @@ class EndIndexVisitor(IndexVisitor):
         '''The end index will be the `pos` obtained from
         the lexer, plus the length of the associated text.
         '''
-        for pos, token, text in node.items:
+        for pos, token, text in node.tokens:
             self.indices.append(pos + len(text))
 
 

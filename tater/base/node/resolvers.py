@@ -75,3 +75,17 @@ class LazyTypeCreator(NodeResolver):
         cls = type(name, (self.Node,), {})
         setattr(self.module, name, cls)
         return cls
+
+
+class LazySyntaxTypeCreator(LazyTypeCreator):
+    '''Sometime's I even amaze myself with my halfassery.
+    '''
+    module = AnonymousNodesModule()
+    sys.modules['tater_anonymous_nodes'] = module
+
+    @CachedAttr
+    def Node(self):
+        '''Circular import avoidance hack.
+        '''
+        from tater.base.node import SyntaxNode
+        return SyntaxNode

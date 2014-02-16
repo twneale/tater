@@ -30,7 +30,7 @@ class Scanner(object):
         '''
         raise NotImplementedError
 
-    def get_startnode(self):
+    def get_startnode(self, matchobj):
         '''Get a node to start at. Called once per tree.
         '''
         raise NotImplementedError
@@ -88,7 +88,7 @@ class Scanner(object):
         tree = None
         try:
             # parse should return None if there're no input items.
-            items = list(self.lexer(self.text, pos=start_pos))
+            items = self.lexer(self.text, pos=start_pos)
             # pprint.pprint(items)
             tree = start.parse(items)
         except ParseError as exc:

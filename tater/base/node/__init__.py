@@ -18,7 +18,10 @@ from tater.utils.itemstream import ItemStream
 
 from tater.base.node.nodespace import NodeSpace
 from tater.base.node.resolvers import (
-    MetaclassRegistryResolver, LazyImportResolver, LazyTypeCreator)
+    MetaclassRegistryResolver,
+    LazyImportResolver,
+    LazyTypeCreator,
+    LazySyntaxTypeCreator)
 from tater.base.node.exceptions import ConfigurationError, ParseError
 
 
@@ -250,7 +253,8 @@ class BaseNode(dict):
         '''
         cls_or_name = cls_or_name or self.__class__.__name__
         cls = self.resolve_noderef(cls_or_name)
-        parent = cls_or_name(*args, **kwargs)
+        parent = cls(**kwargs)
+        parent.tokens.extend(args)
         parent.append(self, related)
         return parent
 
@@ -259,7 +263,9 @@ class BaseNode(dict):
         '''
         cls_or_name = cls_or_name or self.__class__.__name__
         cls = self.resolve_noderef(cls_or_name)
-        child = cls(*args, **kwargs)
+        child = cls(**kwargs)
+        if hasattr(child, 'tokens'):
+            child.tokens.extend(args)
         return self.append(child)
 
     def descend_path(self, *cls_or_name_seq):
@@ -285,7 +291,7 @@ class BaseNode(dict):
     # Readability functions.
     # -----------------------------------------------------------------------
     def pprint(self, offset=0):
-        print offset * ' ', '-', self
+        print(offset * ' ', '-', self)
         for child in self.children:
             child.pprint(offset + 2)
 
@@ -463,10 +469,17 @@ class BaseNode(dict):
 class BaseSyntaxNode(BaseNode):
 
     eq_attrs = ('children', 'tokens', '__class__.__name__',)
+    noderef_resolvers = (
+        MetaclassRegistryResolver,
+        LazyImportResolver,
+        LazySyntaxTypeCreator)
 
     @CachedAttr
     def tokens(self):
         return []
+
+    def __repr__(self):
+        return '%s(tokens=%s)' % (self.__class__.__name__, self.tokens)
 
     #------------------------------------------------------------------------
     # Parsing and dispatch methods.
@@ -516,7 +529,7 @@ class BaseSyntaxNode(BaseNode):
         while 1:
             try:
                 if options.get('debug'):
-                    print '%r <-- %r' % (node, itemstream)
+                    print('%r <-- %r' % (node, itemstream))
                     node.getroot().pprint()
                 node = node.resolve(itemstream)
             except StopIteration:
