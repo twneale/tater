@@ -253,8 +253,10 @@ class _DebugLexerBase(_LexerBase):
             except self._Finished:
                 if text_len <= self.pos:
                     return
-                if self.raise_incomplete:
+                elif self.raise_incomplete:
                     raise IncompleteLex()
+                else:
+                    return
 
     def scan(self):
         # Get the tokendefs for the current state.
