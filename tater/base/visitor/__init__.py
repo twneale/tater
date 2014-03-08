@@ -18,16 +18,29 @@ class Visitor(object):
         children of the visited node won't be visited.
         '''
 
+    class Break(Exception):
+        '''If raised, the visit is immediately done,
+        so stop and call finalize.
+        '''
+
     @CachedAttr
     def methods(self):
         return {}
 
     def visit(self, node):
+        '''The main visit function. Visits the passed-in node and calls
+        finalize.
+        '''
         self.node = node
-        self.visit_nodes(node)
+        try:
+            self.visit_nodes(node)
+        except self.Break:
+            pass
         return self.finalize()
 
     def visit_nodes(self, node):
+        '''Visit the passed in node and each of its children.
+        '''
         try:
             self.visit_node(node)
         except self.Continue:
