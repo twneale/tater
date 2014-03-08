@@ -387,33 +387,39 @@ class BaseNode(dict):
     def _children_to_data(children):
         return [kid.to_data() for kid in children]
 
+    @classmethod
+    def fqname(cls):
+        return '%s.%s' % (cls.__module__, cls.__name__)
+
     _serialization_meta = (
-        dict(attr='__class__.__name__', alias='type'),
-        dict(
-            attr='children',
-            to_data=_children_to_data),
+        dict(alias='type', attr='fqname'),
+        dict(attr='children', to_data=_children_to_data),
         )
 
     def to_data(self):
         '''Render out this object as a json-serializable dictionary.
         '''
         data = dict(data=dict(self))
-        for meta in self._serialization_meta:
+        serialization_meta = getattr(self, 'serialization_meta', [])
+        for meta in self._serialization_meta + tuple(serialization_meta):
             attr = meta['attr']
             alias = meta.get('alias', attr)
             to_data = meta.get('to_data')
-            value = operator.attrgetter(attr)(self)
+            value = getattr(self, attr)
+            if callable(value):
+                value = value()
             if to_data is not None:
                 value = to_data(value)
             data[alias] = value
         return data
 
     @classmethod
-    def fromdata(cls, data, default_node_cls=None):
+    def fromdata(cls, data, default_node_cls=None, nodespace=None):
         '''
         '''
         # Create a new node.
-        nodespace = cls.nodespace
+        if nodespace is None:
+            nodespace = cls.nodespace
 
         # Figure out what node_cls to use.
         if default_node_cls is None:
@@ -429,12 +435,12 @@ class BaseNode(dict):
 
         # Add the children.
         children = []
-        for child in data['children']:
+        for child in data.get('children', []):
             child = cls.fromdata(child)
             node.append(child)
 
         # Add any other attrs marked for inclusion by the class def.
-        for meta in cls._serialization_meta:
+        for meta in cls._serialization_meta + tuple(cls.serialization_meta):
             meta = dict(meta)
             if meta.get('alias') == 'type':
                 continue
@@ -609,7 +615,7 @@ class BaseSyntaxNode(BaseNode):
             items.append((pos, Token.fromstring(token), text))
         node = node_cls(*items)
         children = []
-        for child in data['children']:
+        for child in data.get('children', []):
             child = cls.fromdata(child, namespace)
             child.parent = node
             children.append(child)
