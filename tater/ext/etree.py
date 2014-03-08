@@ -5,6 +5,7 @@ import re
 import functools
 
 import lxml.etree as et
+from lxml.html import HtmlComment
 
 from tater import Visitor, Node
 
@@ -76,3 +77,31 @@ def from_etree(
     if el.tail:
         node['tail'] = el.tail
     return node
+
+
+def from_html(
+    el, node=None, node_cls=None,
+    tagsub=functools.partial(re.sub, r'\{.+?\}', ''),
+    Node=Node, HtmlComment=HtmlComment):
+    '''Convert the element tree to a tater tree.
+    '''
+    node_cls = node_cls or Node
+    node = node or node_cls()
+    tag = tagsub(el.tag)
+    attrib = dict((tagsub(k), v) for (k, v) in el.attrib.items())
+    node.update(attrib, tag=tag)
+
+    if el.text:
+        node['text'] = el.text
+    for child in el:
+        if isinstance(child, HtmlComment):
+            continue
+        elif getattr(child, '__name__', None) == 'Comment':
+            continue
+        child = from_html(child, node_cls=node_cls)
+        node.append(child)
+    if el.tail:
+        node['tail'] = el.tail
+    return node
+
+
