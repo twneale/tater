@@ -4,8 +4,9 @@ otherwise children might be mutated by the visitor
 functions, causing the visitor to skip children
 and not visit them.
 '''
+import types
+import contextlib
 from tater.utils import CachedAttr
-from tater.base.visitor.utils import MethodCache
 
 
 class Visitor(object):
@@ -18,8 +19,8 @@ class Visitor(object):
         '''
 
     @CachedAttr
-    def _methods(self):
-        return MethodCache(visitor=self)
+    def methods(self):
+        return {}
 
     def visit(self, node):
         self.node = node
