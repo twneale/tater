@@ -43,6 +43,8 @@ class LazyImportResolver(NodeResolver):
     '''
     def resolve(self, name):
         module_name, _, name = name.rpartition('.')
+        if not module_name:
+            return
         try:
             module = __import__(module_name, globals(), locals(), [name], -1)
         except ImportError:
