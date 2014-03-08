@@ -109,3 +109,109 @@ class Trie(object):
         trie = cls(*args, **kwargs)
         trie.load(fp)
         return trie
+
+
+
+class Trie(object):
+    '''This trie needs to match a token sequence against a trie
+    of tokentypes. Matches need to be returned as (value, substream)
+    2-tuples.
+    '''
+    def __init__(self, trie=None, terminal_char=0, skipchars=None):
+        self._trie = trie or {}
+        self._terminal_char = terminal_char
+        self._skipchars = skipchars or list(",. '&[]")
+        self.reset()
+
+    def add(self, seq, value):
+        terminal_char = self._terminal_char
+        this = self._trie
+        w_len = len(seq) - 1
+        for i, c in enumerate(seq):
+            if c in self._skipchars:
+                continue
+            try:
+                this = this[c]
+            except KeyError:
+                this[c] = {}
+                this = this[c]
+            if i == w_len:
+                this[terminal_char] = value
+
+    def add_many(self, seq_value_2tuples):
+        terminal_char = self._terminal_char
+        trie = self._trie
+        add = self.add
+        for seq, value in seq_value_2tuples:
+            add(seq, value, terminal_char)
+        return trie
+
+    def reset(self):
+        self._this = self._trie
+        self._in_match = False
+        self._match = []
+        self._res = []
+
+    def process_item(self, item):
+        start, end, tokentype = item
+        match = self._match
+
+        if tokentype in self._skipchars:
+            if self._in_match:
+                match.append(item)
+            return self._in_match
+
+        terminal_char = self._terminal_char
+        this = self._this
+        if tokentype in this:
+            this = self._this = this[tokentype]
+            self.match.append(item)
+            self._in_match = True
+            if terminal_char in this:
+                matchobj = _PseudoMatch(
+                    group=list(match),
+                    start=match[0][0], end=match[-1][0],
+                    value=this[terminal_char])
+                self._res.append(matchobj)
+
+        return False
+
+    def scan(self, itemstream, _match=_PseudoMatch, second=itemgetter(1)):
+        res = []
+        match = []
+        for item in itemstream:
+            start, end, tokentype = item
+            if tokentype in self._skipchars:
+                if in_match:
+                    match.append(item)
+                continue
+            if tokentype in this:
+                this = this[tokentype]
+                match.append(item)
+                in_match = True
+                if terminal_char in this:
+                    _matchobj = _PseudoMatch(group=match,
+                                       start=match[0][0], end=match[-1][0],
+                                       value=this[terminal_char])
+                    res.append(_matchobj)
+            else:
+                break
+
+        if res:
+            # The last match will always be the longest one.
+            return res.pop()
+        else:
+            return []
+
+    def dump(self, fp):
+        s = json.dumps(self._trie)
+        fp.write(s)
+
+    def load(self, fp):
+        self._trie = json.load(fp)
+
+    @classmethod
+    def from_jsonfile(cls, fp, *args, **kwargs):
+        trie = cls(*args, **kwargs)
+        trie.load(fp)
+        return trie
