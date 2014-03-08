@@ -1,3 +1,4 @@
+import types
 from contextlib import contextmanager
 
 from tater import Node
@@ -201,3 +202,23 @@ def get_end(tree):
 
 def get_span(tree):
     return (get_start(tree), get_end(tree))
+
+
+class StreamVisitor(Visitor):
+
+    def visit(self, iterable, gentype=types.GeneratorType):
+        '''The main visit function. Visits the passed-in node and calls
+        finalize.
+        '''
+        self.iterable = iter(iterable)
+        for token in self.iterable:
+            result = self.visit_node(token)
+            if isinstance(result, gentype):
+                for output in result:
+                    yield output
+            elif result is not None:
+                yield result
+        result = self.finalize()
+        if isinstance(result, gentype):
+            for output in result:
+                yield output
