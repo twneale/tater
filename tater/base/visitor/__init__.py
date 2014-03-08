@@ -50,24 +50,78 @@ class Visitor(object):
         for child in self.get_children(node):
             visit_nodes(child)
 
-    def visit_node(self, node):
-        func = self._methods.check(node)
-        if func is not None:
-            return func(node)
+    def apply_visitor_method(self, method_data, node):
+        if hasattr(method_data, '__call__'):
+            return method_data(node)
+        elif isinstance(method_data, tuple):
+            method = method_data[0]
+            args = method_data[1:]
+            return method(*args)
+
+    def visit_node(self, node, gentype=contextlib.GeneratorContextManager):
+        '''Given a node, find the matching visitor function (if any) and
+        run it. If the result is a context manager, yield from all the nodes
+        children before allowing it to exit. Otherwise, return the result.
+        '''
+        method_data = self.get_method(node)
+
+        if method_data is not None:
+            # If it's a context manager, enter, visit children, then exit.
+            # Otherwise just return the result.
+
+            result = self.apply_visitor_method(method_data, node)
+            if isinstance(result, gentype):
+                with result:
+                    visit_nodes = self.visit_nodes
+                    for child in self.get_children(node):
+                        try:
+                            visit_nodes(child)
+                        except self.Continue:
+                            continue
+            else:
+                return result
         else:
             generic_visit = getattr(self, 'generic_visit', None)
             if generic_visit is not None:
                 return generic_visit(node)
 
     def get_nodekey(self, node):
-        return node.__class__.__name__
+        '''Given a node, return the string to use in computing the
+        matching visitor methodname. Can also be a generator of strings.
+        '''
+        yield node.__class__.__name__
 
     def get_children(self, node):
+        '''Given a node, return its children.
+        '''
         return node.children[:]
+
+    def get_methodnames(self, node):
+        '''Given a node, generate all names for matching visitor methods.
+        '''
+        key_or_iter = self.get_nodekey(node)
+        if isinstance(key_or_iter, basestring):
+            yield 'visit_' + key_or_iter
+        for key in key_or_iter:
+            yield 'visit_' + key
+
+    def get_method(self, node):
+        '''Given a particular node, check the visitor instance for methods
+        mathing the computed methodnames (the function is a generator).
+        '''
+        methods = self.methods
+        for methodname in self.get_methodnames(node):
+            if methodname in methods:
+                return methods[methodname]
+            else:
+                method = getattr(self, methodname, None)
+                if method is not None:
+                    methods[methodname] = method
+                    return method
 
     def finalize(self):
         '''Final steps the visitor needs to take, plus the
-        return value or .visit, if any.
+        return value of .visit, if any.
         '''
         return self
 
