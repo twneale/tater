@@ -136,7 +136,8 @@ class IteratorVisitor(Visitor):
 
     def itervisit_nodes(self, node):
         try:
-            yield self.itervisit_node(node)
+            for token in self.itervisit_node(node):
+                yield token
         except self.Continue:
             # Skip visiting the child nodes.
             return
@@ -145,14 +146,41 @@ class IteratorVisitor(Visitor):
             for result in visit_nodes(child):
                 yield result
 
-    def itervisit_node(self, node):
-        func = self._methods.get(node)
+    def itervisit_node(
+            self, node, gentype=types.GeneratorType,
+            ctx_gentype=contextlib.GeneratorContextManager):
+        '''Given a node, find the matching visitor function (if any) and
+        run it. If the result is a context manager, yield from all the nodes
+        children before allowing it to exit. Otherwise, return the result.
+        '''
+        func = self.get_method(node)
         if func is not None:
-            return func(node)
+
+            # If it's a generator, yield the results.
+            result = func(node)
+            if isinstance(result, gentype):
+                for token in result:
+                    yield token
+
+            # If it's a context manager, enter, visit children, then exit.
+            # Otherwise just return the result.
+            elif isinstance(result, ctx_gentype):
+                with result:
+                    visit_nodes = self.visit_nodes
+                    for child in self.get_children(node):
+                        try:
+                            for token in visit_nodes(child):
+                                yield token
+                        except self.Continue:
+                            continue
+            else:
+                yield result
         else:
             generic_visit = getattr(self, 'generic_visit', None)
             if generic_visit is not None:
-                return generic_visit(node)
+                for token in generic_visit(node):
+                    yield token
+
 
     def get_children(self, node):
         '''Override this to determine how child nodes are accessed.
