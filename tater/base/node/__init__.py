@@ -238,6 +238,7 @@ class BaseNode(dict):
         '''Remove this node from parent.
         '''
         self.parent.remove(self)
+        del self.parent
         return self
 
     def remove(self, child):
