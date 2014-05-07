@@ -1,8 +1,8 @@
 import re
 import unittest
 
-from tater import Lexer, Rule as r
-from tater.base.lexer.itemclass import get_itemclass
+from rexlex import Lexer, Rule as r
+from rexlex.lexer.itemclass import get_itemclass
 
 
 class TestLexer(Lexer):

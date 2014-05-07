@@ -18,9 +18,8 @@ class DataVisitor(Visitor):
             return
 
     def visit_dict(self, obj):
-        for k, v in obj.items():
-            self.visit(k)
-            self.visit(v)
+        for item in obj.items():
+            self.visit_dict_item(*item)
 
     def visit_list(self, obj):
         for item in obj:

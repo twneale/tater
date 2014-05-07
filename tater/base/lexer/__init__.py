@@ -215,7 +215,7 @@ class _DebugLexerBase(_LexerBase):
         # Set initial state.
         self.text = text
         self.pos = pos or self.pos
-        self.statestack = statestack or self.statestack
+        self.statestack = statestack or self.statestack[:]
         self.Item = get_itemclass(text)
 
         if self.re_skip is not None:

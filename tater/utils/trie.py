@@ -112,11 +112,8 @@ class Trie(object):
 
 
 
-class Trie(object):
-    '''This trie needs to match a token sequence against a trie
-    of tokentypes. Matches need to be returned as (value, substream)
-    2-tuples.
-    '''
+class IncrementalTrie(object):
+
     def __init__(self, trie=None, terminal_char=0, skipchars=None):
         self._trie = trie or {}
         self._terminal_char = terminal_char
@@ -152,20 +149,20 @@ class Trie(object):
         self._match = []
         self._res = []
 
-    def process_item(self, item):
-        start, end, tokentype = item
+    def process_token(self, item):
+        pos, tokentype, text = item
         match = self._match
 
-        if tokentype in self._skipchars:
+        if text in self._skipchars:
             if self._in_match:
                 match.append(item)
             return self._in_match
 
         terminal_char = self._terminal_char
         this = self._this
-        if tokentype in this:
-            this = self._this = this[tokentype]
-            self.match.append(item)
+        if text in this:
+            this = self._this = this[text]
+            match.append(item)
             self._in_match = True
             if terminal_char in this:
                 matchobj = _PseudoMatch(
@@ -173,35 +170,16 @@ class Trie(object):
                     start=match[0][0], end=match[-1][0],
                     value=this[terminal_char])
                 self._res.append(matchobj)
-
-        return False
-
-    def scan(self, itemstream, _match=_PseudoMatch, second=itemgetter(1)):
-        res = []
-        match = []
-        for item in itemstream:
-            start, end, tokentype = item
-            if tokentype in self._skipchars:
-                if in_match:
-                    match.append(item)
-                continue
-            if tokentype in this:
-                this = this[tokentype]
-                match.append(item)
-                in_match = True
-                if terminal_char in this:
-                    _matchobj = _PseudoMatch(group=match,
-                                       start=match[0][0], end=match[-1][0],
-                                       value=this[terminal_char])
-                    res.append(_matchobj)
-            else:
-                break
-
-        if res:
-            # The last match will always be the longest one.
-            return res.pop()
+                self._match = []
         else:
-            return []
+            self._in_match = False
+
+        return self._in_match
+
+    def get_result(self):
+        result = self._res
+        if result:
+            return result
 
     def dump(self, fp):
         s = json.dumps(self._trie)

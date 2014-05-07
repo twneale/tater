@@ -34,6 +34,9 @@ class ItemStream(object):
         '''
         return not self._stream._exhausted
 
+    def done(self):
+        return (len(self) - 1) == self.i
+
     def next(self):
         i = self.i
         try:

@@ -14,7 +14,7 @@ class DuplicateHandlerFound(Exception):
     '''
 
 
-class Dispatcher(object):
+class Dispatcher:
     '''Implements the base functionality for dispatcher types.
     The node instances delegate their dispatch functions to
     subclasses of Dispatcher.

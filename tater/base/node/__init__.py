@@ -113,19 +113,10 @@ class _NodeMeta(type):
         dispatch_data = meta.compile_dispatch_data(items)
         dispatch_data = meta.prepare(dispatch_data)
 
-        # Compile the class's noderef resolvers.
-        if 'nodespace' in _attrs:
-            nodespace = _attrs['nodespace']
-            nodespace.add_resolvers(*_attrs['noderef_resolvers'])
-            attrs['nodespace'] = nodespace
-
         # Update the class with the dispatch data.
         attrs.update(_dispatch_data=dispatch_data)
         cls = type.__new__(meta, name, bases, attrs)
 
-        # Update the class's nodespace.
-        if 'nodespace' in _attrs:
-            cls.nodespace.register(cls)
         return cls
 
 
@@ -248,6 +239,13 @@ class BaseNode(dict):
     # -----------------------------------------------------------------------
     # High-level mutation methods. String references to types allowed.
     # -----------------------------------------------------------------------
+    def clone(self):
+        new = self.__class__(self)
+        new.children = list(self.children)
+        if hasattr(self, 'parent'):
+            new.parent = self.parent
+        return new
+
     def ascend(self, cls_or_name=None, related=True, *args, **kwargs):
         '''Create a new parent node. Set it as the
         parent of this node. Return the parent.
@@ -292,13 +290,13 @@ class BaseNode(dict):
     # Readability functions.
     # -----------------------------------------------------------------------
     def pprint(self, offset=0):
-        print(offset * ' ', '-', self)
+        print(offset * ' ', '- ', self)
         for child in self.children:
             child.pprint(offset + 2)
 
     def pformat(self, offset=0, buf=None):
         buf = buf or []
-        buf.extend([offset * ' ', ' - ', repr(self), '\n'])
+        buf.extend([offset * ' ', '- ', repr(self), '\n'])
         for child in self.children:
             child.pformat(offset + 2, buf)
         return ''.join(buf)
@@ -312,7 +310,7 @@ class BaseNode(dict):
             this = this.parent
         return this
 
-    def depth_first(self):
+
         yield self
         for child in self.children:
             for node in child.depth_first():

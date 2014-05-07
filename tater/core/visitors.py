@@ -2,7 +2,7 @@ import types
 from contextlib import contextmanager
 
 from tater import Node
-from tater.base.visitor import Visitor
+from tater.base.visitor import Visitor, IteratorVisitor
 
 
 class Transformer(Visitor):
@@ -204,6 +204,23 @@ def get_span(tree):
     return (get_start(tree), get_end(tree))
 
 
+# ---------------------------------------------------------------------------
+# Helpers for getting leaf nodes.
+# ---------------------------------------------------------------------------
+class LeafYielder(IteratorVisitor):
+
+    def generic_visit(self, node):
+        if not node.children:
+            yield node
+
+
+def get_leaf_nodes(node):
+    return LeafYielder().itervisit(node)
+
+
+# ---------------------------------------------------------------------------
+# Stateless stream visitor.
+# ---------------------------------------------------------------------------
 class StreamVisitor(Visitor):
 
     def visit(self, iterable, gentype=types.GeneratorType):
@@ -222,3 +239,13 @@ class StreamVisitor(Visitor):
         if isinstance(result, gentype):
             for output in result:
                 yield output
+
+    def get_nodekey(self, token):
+        '''Given a particular token, check the visitor instance for methods
+        mathing the computed methodnames (the function is a generator).
+        '''
+        if isinstance(token, basestring):
+            yield 'basestring'
+        else:
+            yield type(token).__name__
+            yield token.__class__.__name__
