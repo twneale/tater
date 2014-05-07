@@ -1,9 +1,8 @@
 import logging
 
-from tater.core.tokentype import Token
-from tater.utils.itemstream import ItemStream
-from tater.base.node import BaseNode
-from tater.base.visitor import Visitor, IteratorVisitor
+from hercules import Token, Stream
+from treebie import Node
+from visitors import Visitor
 
 
 class Parser(object):
@@ -17,9 +16,9 @@ class Parser(object):
         _options = self.options
         _options.update(options)
         for cls in self.classes:
-            if issubclass(cls, BaseNode):
+            if issubclass(cls, Node):
                 input_ = cls.parse(input_, **options)
-            elif issubclass(cls, (Visitor, IteratorVisitor)):
+            elif issubclass(cls, Visitor):
                 input_ = cls().visit(input_)
             else:
                 input_ = cls(input_, **options)
