@@ -21,6 +21,8 @@ __all__ = [
 # -eof meta-
 
 from treebie import *
+from treebie.syntaxnode import SyntaxNode
+from treebie.syntaxnode.dispatcher import matches, tokenseq, token_subtypes
 from visitors import *
 from rexlex import *
 import hercules as utils

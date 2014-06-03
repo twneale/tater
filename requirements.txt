@@ -1,4 +1,4 @@
--e git+git@github.com:twneale/hercules.git@db99e09ca9a4d8e79d144e15907f25f3d92c4fa8#egg=hercules-master
--e git+git@github.com:twneale/rexlex.git@add14f94529cb5e222e134e41da505127332562e#egg=rexlex-speed
--e git+git@github.com:twneale/treebie.git@5219add3a065b8b6218579390a27dbdf99ae127e#egg=treebie-master
--e git+git@github.com:twneale/visitors.git@5370836af04be3df00653d582c8dc66761fa873c#egg=visitors-master
+hercules
+rexlex
+treebie
+visitors
